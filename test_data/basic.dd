@@ -1,0 +1,10 @@
+Weapon:Dagger
+    Acc:d6 
+    Dam:d6+p.strength
+
+
+Player:Toby
+    HP:10
+
+    
+
