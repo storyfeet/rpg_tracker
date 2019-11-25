@@ -10,17 +10,29 @@ pub enum Token {
     Plus,
     Minus,
     Equals,
-    WS,
-    NL,
+    Break,
     Qoth(String),
 }
 
-impl Token{
-    pub fn as_str_val(&self)->Result<&str,ParseError>{
-        match self{
-            Token::Ident(s)=>Ok(s),
-            Token::Qoth(s)=>Ok(s),
-            _=>Err(ParseError::new("Not a string type",0)),
+impl Token {
+    pub fn as_str_val(&self) -> Result<&str, ParseError> {
+        match self {
+            Token::Ident(s) => Ok(s),
+            Token::Qoth(s) => Ok(s),
+            _ => Err(ParseError::new("Not a string type", 0)),
+        }
+    }
+
+    pub fn special_char(c: char) -> Option<Token> {
+        match c {
+            '#' => Some(Token::Hash),
+            ':' => Some(Token::Colon),
+            '.' => Some(Token::Dot),
+            '+' => Some(Token::Plus),
+            '-' => Some(Token::Minus),
+            '=' => Some(Token::Equals),
+            '\n' | ';' => Some(Token::Break),
+            _ => None,
         }
     }
 }
@@ -61,13 +73,14 @@ impl<'a> Tokenizer<'a> {
         }
     }
 
-    fn read_ws(&mut self) {
+    fn non_ws(&mut self) -> Option<Token> {
         while let Some(c) = self.peek {
             match c {
                 ' ' | '\t' => self.peek = self.it.next(),
-                _ => return,
+                _ => return self.next(),
             }
         }
+        None
     }
 
     fn read_qoth(&mut self) -> Token {
@@ -107,20 +120,12 @@ impl<'a> Tokenizer<'a> {
     }
 
     ///requires the next char is the right type
-    fn take_single(&mut self) -> Token {
-        match self.peek.take().unwrap_or('_') {
-            '#' => Token::Hash,
-            ':' => Token::Colon,
-            '.' => Token::Dot,
-            '+' => Token::Plus,
-            '-' => Token::Minus,
-            '=' => Token::Equals,
-            '\n' => {
-                self.line_no += 1;
-                Token::NL
-            }
-            _ => Token::WS,
+    fn take_single(&mut self) -> Option<Token> {
+        let r = self.peek.take().unwrap_or(' ');
+        if r == '\n' {
+            self.line_no += 1
         }
+        Token::special_char(r)
     }
 
     fn read_ident(&mut self) -> String {
@@ -133,22 +138,17 @@ impl<'a> Tokenizer<'a> {
                 Some(c) => c,
                 None => return res,
             };
+            if Token::special_char(pk).is_some() {
+                return res;
+            }
             match pk {
-                '\n' | ' ' | ':' | ',' | '"' | '+' | '-' | '=' | '#' => return res,
-                c => {
+                ' ' | '\n' => return res,
+                _ => {
                     self.peek.take();
-                    res.push(c)
+                    res.push(pk)
                 }
             }
         }
-    }
-
-    pub fn next_nws(&mut self) -> Option<Token> {
-        let res = self.next();
-        while res == Some(Token::WS) {
-            res = self.next();
-        }
-        res
     }
 }
 
@@ -159,13 +159,15 @@ impl<'a> Iterator for Tokenizer<'a> {
             self.peek = self.it.next();
         }
 
+        let c = self.peek?;
+        if Token::special_char(c).is_some() {
+            return self.take_single();
+        }
+
         let res = match self.peek? {
-            '\n' | ':' | '-' | '.' | ',' | '+' | '=' | '#' => self.take_single(),
             '"' => self.read_qoth(),
-            ' ' | '\t' => {
-                self.read_ws();
-                Token::WS
-            }
+            ' ' | '\t' => return self.non_ws(),
+
             v if v >= '0' && v <= '9' => Token::Num(self.read_num()),
             _ => Token::Ident(self.read_ident()),
         };
@@ -183,9 +185,7 @@ mod test_tokens {
         assert_eq!(tk.next(), Some(Token::Ident("hello".to_string())));
         assert_eq!(tk.next(), Some(Token::Colon), "c1-2");
         assert_eq!(tk.next(), Some(Token::Num(52)));
-        assert_eq!(tk.next(), Some(Token::WS));
         assert_eq!(tk.next(), Some(Token::Plus));
-        assert_eq!(tk.next(), Some(Token::WS));
         assert_eq!(tk.next(), Some(Token::Ident("d6".to_string())));
         assert!(tk.next().is_none());
     }

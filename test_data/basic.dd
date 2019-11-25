@@ -1,10 +1,12 @@
-Weapon:Dagger
-    Acc:d6 
-    Dam:d6+p.strength
+:Weapon
+Dagger
+    .Acc:d6 
+    .Dam:d6+p.strength
 
-
-Player:Toby
-    HP:10
+:Player
+Bill
+    .HP:10
+    .Acc:d3
 
     
 
