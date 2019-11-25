@@ -1,16 +1,20 @@
 use crate::error::ParseError;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq,Clone)]
 pub enum Token {
     Ident(String),
     Num(i32),
     Hash,
     Dot,
     Colon,
-    Plus,
-    Minus,
+    Add,
+    Sub,
+    Mul,
+    Div,
     Equals,
     Break,
+    BOpen,
+    BClose,
     Qoth(String),
 }
 
@@ -28,9 +32,13 @@ impl Token {
             '#' => Some(Token::Hash),
             ':' => Some(Token::Colon),
             '.' => Some(Token::Dot),
-            '+' => Some(Token::Plus),
-            '-' => Some(Token::Minus),
+            '+' => Some(Token::Add),
+            '-' => Some(Token::Sub),
             '=' => Some(Token::Equals),
+            '*' => Some(Token::Mul),
+            '/' => Some(Token::Div),
+            '(' => Some(Token::BOpen),
+            ')' => Some(Token::BClose),
             '\n' | ';' => Some(Token::Break),
             _ => None,
         }
@@ -185,7 +193,7 @@ mod test_tokens {
         assert_eq!(tk.next(), Some(Token::Ident("hello".to_string())));
         assert_eq!(tk.next(), Some(Token::Colon), "c1-2");
         assert_eq!(tk.next(), Some(Token::Num(52)));
-        assert_eq!(tk.next(), Some(Token::Plus));
+        assert_eq!(tk.next(), Some(Token::Add));
         assert_eq!(tk.next(), Some(Token::Ident("d6".to_string())));
         assert!(tk.next().is_none());
     }

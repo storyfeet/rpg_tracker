@@ -1,29 +1,23 @@
 mod error;
 mod parse;
 mod token;
+mod expr;
 
 use clap_conf::prelude::*;
 use std::collections::BTreeMap;
 
-#[derive(Debug)]
-pub enum DnDType {
-    Player,
-    Item,
-    Weapon,
-    Attack,
-}
 
 #[derive(Debug)]
 pub struct DnDItem {
     name: String,
-    dtype: DnDType,
+    dtype: String,
     stats: BTreeMap<String, i32>,
     lists: BTreeMap<String, Vec<String>>,
     items: BTreeMap<String, i32>,
 }
 
 impl DnDItem {
-    pub fn new(name: String, itype: DnDType) -> Self {
+    pub fn new(name: String, itype: String) -> Self {
         DnDItem {
             name: name,
             dtype: itype,
@@ -49,7 +43,7 @@ fn main() -> Result<(), failure::Error> {
 
     let fs = std::fs::read_to_string(fname)?;
 
-    let mut r = parse::ActionReader::new(&fs);
+    let r = parse::ActionReader::new(&fs);
     for a in r {}
 
     let mut items: Vec<DnDItem> = Vec::new();

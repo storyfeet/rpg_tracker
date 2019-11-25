@@ -14,4 +14,9 @@ impl ParseError {
             line,
         }
     }
+
+    pub fn set_line(mut self, n: i32) -> Self {
+        self.line = n;
+        self
+    }
 }
