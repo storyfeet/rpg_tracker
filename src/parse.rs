@@ -1,11 +1,18 @@
 use crate::error::ParseError;
+use crate::expr::Expr;
 use crate::token::{Token, Tokenizer};
 
+#[derive(Debug)]
 pub enum Action {
     SetItemType(String),
     SetItem(String),
-    AddStat(String, i32),
-    SetStat(String, i32),
+    AddStat(String, Expr),
+    SubStat(String, Expr),
+    SetStat(String, Expr),
+    AddListItem(String, String),
+    RemListItem(String, String),
+    GainItem(i32, String),
+    LoseItem(i32, String),
 
     NoAction,
 }
@@ -45,8 +52,8 @@ impl<'a> ActionReader<'a> {
     }
 
     pub fn set_item_type(&mut self) -> Result<Action, ParseError> {
-        self.peek = self.it.next();
-        match self.peek {
+        self.peek.take();
+        match self.it.next() {
             None => Err(ParseError::new("Ux-EOF", self.it.line_no)),
             Some(Token::Ident(ref s)) => Ok(Action::SetItemType(s.clone())),
             Some(Token::Qoth(ref s)) => Ok(Action::SetItemType(s.clone())),
@@ -55,8 +62,25 @@ impl<'a> ActionReader<'a> {
     }
 
     pub fn set_property(&mut self) -> Result<Action, ParseError> {
-        //TODO 
-        return Ok(Action::SetItem("H".to_string()))
+        //rem dot
+        self.peek = self.it.next();
+        let idstr = self
+            .peek
+            .as_ref()
+            .ok_or(ParseError::new("no property name", self.it.line_no))?
+            .as_str_val()?
+            .to_string();
+
+        match self.it.next() {
+            None => Err(ParseError::new("No property action", self.it.line_no)),
+            Some(Token::Equals) => Ok(Action::SetStat(idstr, Expr::from_tokens(&mut self.it)?)),
+            Some(Token::Add) => Ok(Action::AddStat(idstr, Expr::from_tokens(&mut self.it)?)),
+            Some(Token::Sub) => Ok(Action::SubStat(idstr, Expr::from_tokens(&mut self.it)?)),
+            _ => Err(ParseError::new(
+                "Not sure what do do with property type",
+                self.it.line_no,
+            )),
+        }
     }
 }
 
@@ -66,7 +90,8 @@ impl<'a> Iterator for ActionReader<'a> {
         if self.peek == None {
             self.peek = self.it.next();
         }
-        match self.peek {
+        println!("Areader self.peek == {:?}", self.peek);
+        let res = match self.peek {
             None => None,
             Some(Token::Colon) => Some(self.set_item_type()),
             Some(Token::Hash) => Some(self.read_comment_line()),
@@ -77,5 +102,7 @@ impl<'a> Iterator for ActionReader<'a> {
                 Some(Err(ParseError::new("err", self.it.line_no)))
             }
         }
+        self.after_break();
+        res
     }
 }

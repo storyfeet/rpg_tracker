@@ -5,13 +5,14 @@ mod expr;
 
 use clap_conf::prelude::*;
 use std::collections::BTreeMap;
+use crate::expr::Expr;
 
 
 #[derive(Debug)]
 pub struct DnDItem {
     name: String,
     dtype: String,
-    stats: BTreeMap<String, i32>,
+    stats: BTreeMap<String, Expr>,
     lists: BTreeMap<String, Vec<String>>,
     items: BTreeMap<String, i32>,
 }
@@ -44,9 +45,11 @@ fn main() -> Result<(), failure::Error> {
     let fs = std::fs::read_to_string(fname)?;
 
     let r = parse::ActionReader::new(&fs);
-    for a in r {}
+     
+    for a in r {
+        println!(" -- {:?}",a?);
+    }
 
-    let mut items: Vec<DnDItem> = Vec::new();
 
     Ok(())
 }
