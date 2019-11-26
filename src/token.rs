@@ -1,6 +1,6 @@
 use crate::error::ParseError;
 
-#[derive(Debug, Eq, PartialEq,Clone)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
     Ident(String),
     Num(i32),
@@ -23,7 +23,7 @@ impl Token {
         match self {
             Token::Ident(s) => Ok(s),
             Token::Qoth(s) => Ok(s),
-            _ => Err(ParseError::new("Not a string type", 0)),
+            _ => Err(ParseError::new(&format!("{:?} not a string type", self), 0)),
         }
     }
 
@@ -48,6 +48,7 @@ impl Token {
 pub struct Tokenizer<'a> {
     it: std::str::Chars<'a>,
     peek: Option<char>,
+    prev: Option<Token>,
     pub line_no: i32,
 }
 
@@ -57,7 +58,12 @@ impl<'a> Tokenizer<'a> {
             it: s.chars(),
             peek: None,
             line_no: 0,
+            prev: None,
         }
+    }
+
+    pub fn previous(&mut self) -> Option<Token> {
+        self.prev.clone()
     }
 
     fn read_num(&mut self) -> i32 {
@@ -174,12 +180,13 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         let res = match self.peek? {
             '"' => self.read_qoth(),
-            ' ' | '\t' => return self.non_ws(),
+            ' ' | '\t' => self.non_ws()?,
 
             v if v >= '0' && v <= '9' => Token::Num(self.read_num()),
             _ => Token::Ident(self.read_ident()),
         };
 
+        self.prev = Some(res.clone());
         Some(res)
     }
 }

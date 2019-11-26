@@ -1,12 +1,26 @@
-:Weapon
+
+Weapon
+    .Dam=3
+
+
 Dagger
-    .Acc:d6 
-    .Dam:d6+p.strength
+    
+
+    .Acc=d6 
+    +Tent
+    +2Flowers 
+    +3 Pigs
+    -Pigs
+
+#This is a comment
 
 :Player
 Bill
-    .HP:10
-    .Acc:d3
+        #another comment
+    .HP=10
+    .Acc=d3
+    .Speed+d3+3 -p.strength
 
-    
+
+    .HP+5
 

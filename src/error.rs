@@ -20,3 +20,17 @@ impl ParseError {
         self
     }
 }
+
+#[derive(Debug, Fail)]
+#[fail(display = "Action Error: {}", mess)]
+pub struct ActionError {
+    mess: String,
+}
+
+impl ActionError {
+    pub fn new(s: &str) -> Self {
+        ActionError {
+            mess: s.to_string(),
+        }
+    }
+}
