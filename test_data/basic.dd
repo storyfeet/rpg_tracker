@@ -1,11 +1,12 @@
 
 Weapon
     .Dam=3
+    .Dam=[]
+    .Dam+[red,green,"blue and ,purple",pink]
+    .Dam-[]
 
 
 Dagger
-    
-
     .Acc=d6 
     +Tent
     +2Flowers 

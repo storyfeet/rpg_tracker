@@ -18,10 +18,30 @@ pub enum Expr {
 impl Add for Expr {
     type Output = Expr;
     fn add(self, rhs: Expr) -> Self::Output {
-        Expr::Add(Box::new(self), Box::new(rhs))
+        use Expr::*;
+        match self {
+            Num(a) => match rhs {
+                Num(b) => Num(a + b),
+                e => Add(Box::new(Num(a)), Box::new(e)),
+            },
+            a => Add(Box::new(a), Box::new(rhs)),
+        }
     }
 }
 
+impl Sub for Expr {
+    type Output = Expr;
+    fn sub(self, rhs: Expr) -> Self::Output {
+        use Expr::*;
+        match self {
+            Num(a) => match rhs {
+                Num(b) => Num(a - b),
+                e => Sub(Box::new(Num(a)), Box::new(e)),
+            },
+            a => Sub(Box::new(a), Box::new(rhs)),
+        }
+    }
+}
 impl FromStr for Expr {
     type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

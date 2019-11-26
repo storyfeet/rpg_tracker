@@ -1,8 +1,9 @@
+mod dndata;
 mod error;
 mod expr;
 mod parse;
 mod token;
-mod dndata;
+mod value;
 
 use dndata::DnData;
 
@@ -28,11 +29,11 @@ fn main() -> Result<(), failure::Error> {
     let mut data = DnData::new();
 
     for a in r {
-//        println!(" -- {:?}", a);
+        //        println!(" -- {:?}", a);
         data.do_action(a?);
     }
 
-    println!("{:?}",data);
+    println!("{:?}", data);
 
     Ok(())
 }

@@ -1,13 +1,14 @@
 use crate::error::ParseError;
 use crate::expr::Expr;
 use crate::token::{Token, Tokenizer};
+use crate::dndata::Value;
 
 #[derive(Debug)]
 pub enum Action {
     SetItemType(String),
     SetItem(String),
-    AddStat(String, Expr),
-    SetStat(String, Expr),
+    AddStat(String, Value),
+    SetStat(String, Value),
     AddListItem(String, String),
     RemListItem(String, String),
     GainItem(String,i32),
