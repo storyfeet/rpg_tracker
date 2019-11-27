@@ -3,7 +3,7 @@ Weapon
     .Dam=3
     .Dam=[]
     .Dam+[red,green,"blue and ,purple",pink]
-    .Dam-[]
+    .Dam-[pink]
 
 
 Dagger
@@ -20,8 +20,7 @@ Bill
         #another comment
     .HP=10
     .Acc=d3
-    .Speed+d3+3 -p.strength
-
+    .Speed+(d3+3 -p.strength)
 
     .HP+5
 

@@ -30,7 +30,19 @@ fn main() -> Result<(), failure::Error> {
 
     for a in r {
         //        println!(" -- {:?}", a);
-        data.do_action(a?);
+        let a = match a {
+            Ok(v)=>{
+                println!(" OK {:?}",v);
+                v
+            }
+            Err(e)=>{
+                println!("Error {}",e);
+                continue;
+            }
+        };
+        if let Err(e) = data.do_action(a) {
+            println!("Error {}", e);
+        }
     }
 
     println!("{:?}", data);

@@ -1,7 +1,7 @@
-use crate::expr::Expr;
-use std::ops::{Add, Sub};
-use crate::token::{Token,Tokenizer};
 use crate::error::ParseError;
+use crate::expr::Expr;
+use crate::token::{Token, Tokenizer};
+use std::ops::{Add, Sub};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -18,7 +18,7 @@ impl Add for Value {
         match self {
             Null => rhs,
             Ex(mut a) => match rhs {
-                Null=>Ex(a),
+                Null => Ex(a),
                 Ex(b) => Ex(a + b),
                 Str(b) => Ex(a + Expr::Ident(b)),
                 List(bb) => {
@@ -82,7 +82,7 @@ impl Sub for Value {
                 }
             },
             Str(mut a) => match rhs {
-                Null=>
+                Null => Null,
                 Ex(_) => Null,
                 Str(b) => {
                     a.push_str(&b.to_string());
@@ -96,12 +96,15 @@ impl Sub for Value {
                 }
             },
             List(mut a) => match rhs {
+                Null => Null,
                 Ex(b) => {
                     a.push(format!("{:?}", b));
                     List(a)
                 }
                 Str(b) => {
+                    
                     a.push(b);
+
                     List(a)
                 }
                 List(b) => {
@@ -112,7 +115,6 @@ impl Sub for Value {
         }
     }
 }
-
 
 impl From<String> for Value {
     fn from(s: String) -> Self {
@@ -127,26 +129,26 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn from_tokens(t:&mut Tokenizer)->Result<Self,ParseError>{
-        match t.next(){
-            None=>Err(ParseError::new("UX-EOF",t.line_no)),
-            Some(Token::BOpen)=>Expr::from_tokens(t).map(|v|Value::Ex(v)),
-            Some(Token::BOpen)=>{
+    pub fn from_tokens(t: &mut Tokenizer) -> Result<Self, ParseError> {
+        match t.next() {
+            None => Err(ParseError::new("UX-EOF", t.line_no)),
+            Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
+            Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
-                while let Some(v) = t.next(){
+                while let Some(v) = t.next() {
+                    println!("Value fromtokens {:?}",v);
                     match v {
-                        Token::Qoth(s)|Token::Ident(s)=>rlist.push(s),
-                        Token::Num(n)=>rlist.push(n.to_string()),
+                        Token::Qoth(s) | Token::Ident(s) => rlist.push(s),
+                        Token::Num(n) => rlist.push(n.to_string()),
                         Token::SBClose => return Ok(Value::List(rlist)),
-                        e=>return Err(ParseError::new(&format!("UX - {:?}",e),t.line_no)),
+                        e => return Err(ParseError::new(&format!("UX - {:?}", e), t.line_no)),
                     }
                 }
-                Err(ParseError::new("UX-EOF",t.line_no))
-
-            },
-            Some(Token::Ident(s))|Some(Token::Qoth(s))=> Ok(Value::Str(s)),
-            Some(Token::Num(n))=>Ok(Value::Ex(Expr::Num(n))),
-            v=>Err(ParseError::new(&format!("UX - {:?}",v),t.line_no)),
+                Err(ParseError::new("UX-EOF", t.line_no))
+            }
+            Some(Token::Ident(s)) | Some(Token::Qoth(s)) => Ok(Value::Str(s)),
+            Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
+            v => Err(ParseError::new(&format!("UX - {:?}", v), t.line_no)),
         }
     }
 }

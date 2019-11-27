@@ -20,6 +20,25 @@ pub enum Token {
     Qoth(String),
 }
 
+pub struct Prev<I: Clone, T: Iterator<Item = I>> {
+    it: T,
+    prev: Option<I>,
+}
+
+impl<I: Clone, T: Iterator<Item = I>> Iterator for Prev<I, T> {
+    type Item = I;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.prev = self.it.next();
+        self.prev.clone()
+    }
+}
+
+impl<I: Clone, T: Iterator<Item = I>> Prev<I, T> {
+    pub fn previous(&self) -> Option<I> {
+        self.prev.clone()
+    }
+}
+
 impl Token {
     pub fn as_str_val(&self) -> Result<&str, ParseError> {
         match self {
@@ -50,8 +69,7 @@ impl Token {
 }
 
 pub struct Tokenizer<'a> {
-    it: std::str::Chars<'a>,
-    peek: Option<char>,
+    it: Prev<char, std::str::Chars<'a>>,
     prev: Option<Token>,
     pub line_no: i32,
 }
@@ -59,8 +77,10 @@ pub struct Tokenizer<'a> {
 impl<'a> Tokenizer<'a> {
     pub fn new(s: &'a str) -> Self {
         Tokenizer {
-            it: s.chars(),
-            peek: None,
+            it: Prev {
+                it: s.chars(),
+                prev: None,
+            },
             line_no: 0,
             prev: None,
         }
@@ -72,22 +92,20 @@ impl<'a> Tokenizer<'a> {
 
     fn read_num(&mut self) -> i32 {
         let mut res = 0;
+        let mut ch = self.it.previous();
         loop {
-            if self.peek == None {
-                self.peek = self.it.next();
-            }
-            match self.peek {
+            match ch {
                 Some(c) => {
                     if c >= '0' && c <= '9' {
                         res *= 10;
                         res += (c as i32) - 48;
-                        self.peek.take();
                     } else {
                         return res;
                     }
                 }
                 None => return res,
             }
+            ch = self.it.next()
         }
     }
 
@@ -173,16 +191,12 @@ impl<'a> Tokenizer<'a> {
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.peek == None {
-            self.peek = self.it.next();
-        }
-
-        let c = self.peek?;
+        let c = self.it.next()?;
         if Token::special_char(c).is_some() {
             return self.take_single();
         }
 
-        let res = match self.peek? {
+        let res = match c {
             '"' => self.read_qoth(),
             ' ' | '\t' => self.non_ws()?,
 
