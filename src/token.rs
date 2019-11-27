@@ -15,6 +15,8 @@ pub enum Token {
     Break,
     BOpen,
     BClose,
+    SBOpen,
+    SBClose,
     Qoth(String),
 }
 
@@ -39,6 +41,8 @@ impl Token {
             '/' => Some(Token::Div),
             '(' => Some(Token::BOpen),
             ')' => Some(Token::BClose),
+            '[' => Some(Token::SBOpen),
+            ']' => Some(Token::SBClose),
             '\n' | ';' => Some(Token::Break),
             _ => None,
         }

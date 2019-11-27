@@ -1,8 +1,7 @@
 use crate::error::ActionError;
-use crate::expr::Expr;
 use crate::parse::Action;
+use crate::value::Value;
 use std::collections::BTreeMap;
-use std::ops::Add;
 
 #[derive(Debug, PartialEq)]
 pub struct DnDItem {
@@ -20,17 +19,25 @@ impl DnDItem {
         }
     }
 
-    pub fn set_data(&mut self, name: String, v: Value, rel: bool) {
-        if !rel {
-            self.data.insert(name, v);
-            return;
-        }
+    pub fn set_data(&mut self, name: String, v: Value) {
+        self.data.insert(name, v);
+    }
+
+    pub fn add_data(&mut self,name:String,v:Value){
         let s = self.data.remove(&name);
         match s {
             None => self.data.insert(name, v),
             Some(old) => self.data.insert(name, old + v),
         };
     }
+    pub fn sub_data(&mut self,name:String,v:Value){
+        let s = self.data.remove(&name);
+        match s {
+            None => self.data.insert(name, v),
+            Some(old) => self.data.insert(name, old - v),
+        };
+    }
+    
 }
 
 #[derive(Debug)]
@@ -65,12 +72,17 @@ impl DnData {
             Action::SetStat(n, v) => {
                 self.current_item()
                     .ok_or(ActionError::new("no item"))?
-                    .set_data(n, v.into(), false);
+                    .set_data(n, v);
             }
             Action::AddStat(n, v) => {
                 self.current_item()
                     .ok_or(ActionError::new("no item"))?
-                    .set_data(n, v.into(), true);
+                    .add_data(n, v);
+            }
+            Action::SubStat(n, v) => {
+                self.current_item()
+                    .ok_or(ActionError::new("no item"))?
+                    .sub_data(n, v);
             }
             _ => {}
         };
