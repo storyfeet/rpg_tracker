@@ -1,4 +1,5 @@
 use crate::error::ParseError;
+use crate::prev_iter::{Prev,LineCounter};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
@@ -7,6 +8,7 @@ pub enum Token {
     Hash,
     Dot,
     Colon,
+    Comma,
     Add,
     Sub,
     Mul,
@@ -18,25 +20,6 @@ pub enum Token {
     SBOpen,
     SBClose,
     Qoth(String),
-}
-
-pub struct Prev<I: Clone, T: Iterator<Item = I>> {
-    it: T,
-    prev: Option<I>,
-}
-
-impl<I: Clone, T: Iterator<Item = I>> Iterator for Prev<I, T> {
-    type Item = I;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.prev = self.it.next();
-        self.prev.clone()
-    }
-}
-
-impl<I: Clone, T: Iterator<Item = I>> Prev<I, T> {
-    pub fn previous(&self) -> Option<I> {
-        self.prev.clone()
-    }
 }
 
 impl Token {
@@ -62,6 +45,7 @@ impl Token {
             ')' => Some(Token::BClose),
             '[' => Some(Token::SBOpen),
             ']' => Some(Token::SBClose),
+            ',' => Some(Token::Comma),
             '\n' | ';' => Some(Token::Break),
             _ => None,
         }
@@ -71,16 +55,13 @@ impl Token {
 pub struct Tokenizer<'a> {
     it: Prev<char, std::str::Chars<'a>>,
     prev: Option<Token>,
-    pub line_no: i32,
+    pub line_no: usize,
 }
 
 impl<'a> Tokenizer<'a> {
     pub fn new(s: &'a str) -> Self {
         Tokenizer {
-            it: Prev {
-                it: s.chars(),
-                prev: None,
-            },
+            it: Prev::new(s.chars()),
             line_no: 0,
             prev: None,
         }
@@ -92,116 +73,86 @@ impl<'a> Tokenizer<'a> {
 
     fn read_num(&mut self) -> i32 {
         let mut res = 0;
-        let mut ch = self.it.previous();
         loop {
-            match ch {
+            match self.it.next() {
                 Some(c) => {
                     if c >= '0' && c <= '9' {
                         res *= 10;
                         res += (c as i32) - 48;
                     } else {
+                        self.it.back();
                         return res;
                     }
                 }
                 None => return res,
             }
-            ch = self.it.next()
         }
     }
 
-    fn non_ws(&mut self) -> Option<Token> {
-        while let Some(c) = self.peek {
-            match c {
-                ' ' | '\t' => self.peek = self.it.next(),
-                _ => return self.next(),
-            }
-        }
-        None
-    }
-
+    /// starts after the '"'
     fn read_qoth(&mut self) -> Token {
-        self.peek = self.it.next(); //read open quote
         let mut res = String::new();
-        let mut esc = false;
-        loop {
-            if self.peek == None {
-                self.peek = self.it.next();
-            }
-            let pk = match self.peek {
-                Some(c) => c,
-                None => return Token::Qoth(res),
-            };
-            if esc {
-                esc = false;
-                res.push(pk);
-                continue;
-            }
-            match pk {
-                '\\' => esc = true,
-                '"' => {
-                    self.peek.take();
-                    return Token::Qoth(res);
-                }
+        while let Some(c) = self.it.next() {
+            match c {
+                '\\' => res.push(self.it.next().unwrap_or(' ')),
+                '"' => return Token::Qoth(res),
                 '\n' => {
                     self.line_no += 1;
-                    self.peek.take();
                     res.push('\n');
                 }
-                c => {
-                    self.peek.take();
-                    res.push(c)
-                }
+                c => res.push(c),
             }
         }
-    }
-
-    ///requires the next char is the right type
-    fn take_single(&mut self) -> Option<Token> {
-        let r = self.peek.take().unwrap_or(' ');
-        if r == '\n' {
-            self.line_no += 1
-        }
-        Token::special_char(r)
+        Token::Qoth(res)
     }
 
     fn read_ident(&mut self) -> String {
         let mut res = String::new();
         loop {
-            if self.peek == None {
-                self.peek = self.it.next();
-            }
-            let pk = match self.peek {
+            let c = match self.it.next() {
                 Some(c) => c,
                 None => return res,
             };
-            if Token::special_char(pk).is_some() {
+            if let Some(_) = Token::special_char(c) {
+                self.it.back();
                 return res;
             }
-            match pk {
-                ' ' | '\n' => return res,
-                _ => {
-                    self.peek.take();
-                    res.push(pk)
-                }
+            match c {
+                ' ' | '\t' => return res,
+                _ => res.push(c),
             }
         }
+    }
+}
+
+impl<'a> LineCounter for Tokenizer<'a>{
+    fn line(&self)->usize{
+        self.line_no
     }
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
     fn next(&mut self) -> Option<Self::Item> {
-        let c = self.it.next()?;
-        if Token::special_char(c).is_some() {
-            return self.take_single();
+        let mut c = self.it.next()?;
+        while c == ' ' || c == '\t' {
+            c = self.it.next()?;
+        }
+        if let Some(r) = Token::special_char(c) {
+            return Some(r);
         }
 
         let res = match c {
             '"' => self.read_qoth(),
-            ' ' | '\t' => self.non_ws()?,
 
-            v if v >= '0' && v <= '9' => Token::Num(self.read_num()),
-            _ => Token::Ident(self.read_ident()),
+            v if v >= '0' && v <= '9' =>{
+                self.it.back();
+                Token::Num(self.read_num())
+            }
+            _ => {
+                self.it.back();
+                Token::Ident(self.read_ident())
+            }
         };
 
         self.prev = Some(res.clone());
@@ -222,4 +173,18 @@ mod test_tokens {
         assert_eq!(tk.next(), Some(Token::Ident("d6".to_string())));
         assert!(tk.next().is_none());
     }
+
+    #[test]
+    pub fn test_qoth(){
+        let mut tk = Tokenizer::new(r#"hello:"Goodbye","Nice","to \"meet\" you""#);
+        assert_eq!(tk.next().unwrap(),Token::Ident("hello".to_string()));
+        assert_eq!(tk.next().unwrap(),Token::Colon);
+        assert_eq!(tk.next().unwrap(),Token::Qoth("Goodbye".to_string()));
+        assert_eq!(tk.next().unwrap(),Token::Comma);
+        assert_eq!(tk.next().unwrap(),Token::Qoth("Nice".to_string()));
+        assert_eq!(tk.next().unwrap(),Token::Comma);
+        assert_eq!(tk.next().unwrap(),Token::Qoth("to \"meet\" you".to_string()));
+        assert!(tk.next().is_none());
+    }
+
 }

@@ -1,30 +1,31 @@
 use crate::error::ParseError;
-use crate::expr::Expr;
+use crate::prev_iter::{Prev,LineCounter};
 use crate::token::{Token, Tokenizer};
 use crate::value::Value;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Action {
-    SetItemType(String),
     SetItem(String),
     AddStat(String, Value),
     SubStat(String, Value),
     SetStat(String, Value),
-    AddListItem(String, String),
-    RemListItem(String, String),
     GainItem(String, i32),
-
-    NoAction,
 }
 
 pub struct ActionReader<'a> {
-    it: Tokenizer<'a>,
+    it: Prev<Token, Tokenizer<'a>>,
+}
+
+impl<'a> LineCounter for ActionReader<'a>{
+    fn line(&self)->usize{
+        self.it.line()
+    }
 }
 
 impl<'a> ActionReader<'a> {
     pub fn new(s: &'a str) -> Self {
         ActionReader {
-            it: Tokenizer::new(s),
+            it: Prev::new(Tokenizer::new(s)),
         }
     }
 }
@@ -38,68 +39,38 @@ impl<'a> ActionReader<'a> {
             }
         }
     }
-    //return String = svalue, bool is continue to next part
-    fn set_item(&mut self) -> Result<Action, ParseError> {
-        let s1 = self
-            .it
-            .previous()
-            .ok_or(ParseError::new("String short", 0))?
-            .as_str_val()
-            .map_err(|p| p.set_line(self.it.line_no))?
-            .to_string();
-        Ok(Action::SetItem(s1))
-    }
-
-    pub fn set_item_type(&mut self) -> Result<Action, ParseError> {
-        match self.it.next() {
-            None => Err(ParseError::new("Ux-EOF", self.it.line_no)),
-            Some(Token::Ident(ref s)) => Ok(Action::SetItemType(s.clone())),
-            Some(Token::Qoth(ref s)) => Ok(Action::SetItemType(s.clone())),
-            _ => Err(ParseError::new("Expeted Ident", self.it.line_no)),
-        }
-    }
-
     fn gain_item(&mut self, mul: i32) -> Result<Action, ParseError> {
         let n = match self.it.next() {
-            None => return Err(ParseError::new("UX-eof", self.it.line_no)),
+            None => return Err(self.err("UX-eof")),
             Some(Token::Qoth(s)) | Some(Token::Ident(s)) => return Ok(Action::GainItem(s, mul)),
             Some(Token::Num(n)) => n,
-            x => {
-                return Err(ParseError::new(
-                    &format!("{:?} cannot be gained", x),
-                    self.it.line_no,
-                ))
-            }
+            x => return Err(self.err( &format!("{:?} cannot be gained", x))),
         };
         let iname = self
             .it
             .next()
             .ok_or(ParseError::new("No item to gain", 0))?
             .as_str_val()
-            .map_err(|p| p.set_line(self.it.line_no))?
+            .map_err(|p| p.set_line(self.line()))?
             .to_string();
 
         Ok(Action::GainItem(iname, n * mul))
     }
 
     pub fn set_property(&mut self) -> Result<Action, ParseError> {
-        //rem dot
         let idstr = self
             .it
             .next()
-            .ok_or(ParseError::new("no property name", self.it.line_no))?
+            .ok_or(self.err("no property name"))?
             .as_str_val()?
             .to_string();
 
         match self.it.next() {
-            None => Err(ParseError::new("No property action", self.it.line_no)),
+            None => Err(self.err("No property action")),
             Some(Token::Equals) => Ok(Action::SetStat(idstr, Value::from_tokens(&mut self.it)?)),
             Some(Token::Add) => Ok(Action::AddStat(idstr, Value::from_tokens(&mut self.it)?)),
             Some(Token::Sub) => Ok(Action::SubStat(idstr, Value::from_tokens(&mut self.it)?)),
-            _ => Err(ParseError::new(
-                "Not sure what do do with property type",
-                self.it.line_no,
-            )),
+            _ => Err(self.err( "Not sure what do do with property type")),
         }
     }
 }
@@ -109,17 +80,16 @@ impl<'a> Iterator for ActionReader<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let res = match self.it.next() {
             None => None,
-            Some(Token::Colon) => Some(self.set_item_type()),
             Some(Token::Hash) => {
                 Some(self.read_to_break());
                 return self.next();
             }
-            Some(Token::Ident(_)) | Some(Token::Qoth(_)) => Some(self.set_item()),
+            Some(Token::Ident(s)) | Some(Token::Qoth(s)) => Some(Ok(Action::SetItem(s))),
             Some(Token::Dot) => Some(self.set_property()),
             Some(Token::Break) => return self.next(),
             Some(Token::Add) => Some(self.gain_item(1)),
             Some(Token::Sub) => Some(self.gain_item(-1)),
-            _ => Some(Err(ParseError::new("err", self.it.line_no))),
+            Some(t) => Some(Err(self.err(&format!("UX - {:?}",t)))),
         };
         res
     }

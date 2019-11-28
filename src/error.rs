@@ -4,18 +4,18 @@ use failure_derive::*;
 #[fail(display = "Parse Error: line {} :{}", line, mess)]
 pub struct ParseError {
     mess: String,
-    line: i32,
+    line: usize,
 }
 
 impl ParseError {
-    pub fn new(s: &str, line: i32) -> Self {
+    pub fn new(s: &str, line: usize) -> Self {
         ParseError {
             mess: s.to_string(),
             line,
         }
     }
 
-    pub fn set_line(mut self, n: i32) -> Self {
+    pub fn set_line(mut self, n: usize) -> Self {
         self.line = n;
         self
     }

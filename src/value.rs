@@ -1,7 +1,8 @@
 use crate::error::ParseError;
 use crate::expr::Expr;
-use crate::token::{Token, Tokenizer};
+use crate::token::{Token };
 use std::ops::{Add, Sub};
+use crate::prev_iter::{LineCounter};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -102,7 +103,6 @@ impl Sub for Value {
                     List(a)
                 }
                 Str(b) => {
-                    
                     a.push(b);
 
                     List(a)
@@ -129,26 +129,47 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn from_tokens(t: &mut Tokenizer) -> Result<Self, ParseError> {
+    pub fn from_tokens<T: Iterator<Item = Token>+LineCounter>(t: &mut T) -> Result<Self, ParseError> {
         match t.next() {
-            None => Err(ParseError::new("UX-EOF", t.line_no)),
+            None => Err(t.err("UX-EOF")),
             Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = t.next() {
-                    println!("Value fromtokens {:?}",v);
                     match v {
                         Token::Qoth(s) | Token::Ident(s) => rlist.push(s),
                         Token::Num(n) => rlist.push(n.to_string()),
                         Token::SBClose => return Ok(Value::List(rlist)),
-                        e => return Err(ParseError::new(&format!("UX - {:?}", e), t.line_no)),
+                        Token::Comma=>{},
+                        e => return Err(t.err(&format!("UX - {:?}", e))),
                     }
                 }
-                Err(ParseError::new("UX-EOF", t.line_no))
+                Err(t.err("UX-EOF"))
             }
             Some(Token::Ident(s)) | Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
-            v => Err(ParseError::new(&format!("UX - {:?}", v), t.line_no)),
+            v => Err(t.err(&format!("UX - {:?}", v))),
         }
     }
 }
+
+pub struct VIter<'a>{
+    v:&'a Value,
+    n:usize,
+}
+/*
+impl Iterator for VIter
+
+impl<'a> IntoIterator for &'a Value{
+    type IntoIter = std::slice::Iter;
+    type Item = &'a str;
+    fn into_iter(self)->Self::IntoIter{
+        
+    }
+}
+
+impl Iterator for Value{
+    type Item=String;
+    fn next(&mut self
+}
+*/

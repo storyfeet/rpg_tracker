@@ -2,6 +2,7 @@ mod dndata;
 mod error;
 mod expr;
 mod parse;
+mod prev_iter;
 mod token;
 mod value;
 
@@ -31,12 +32,12 @@ fn main() -> Result<(), failure::Error> {
     for a in r {
         //        println!(" -- {:?}", a);
         let a = match a {
-            Ok(v)=>{
-                println!(" OK {:?}",v);
+            Ok(v) => {
+                println!(" OK {:?}", v);
                 v
             }
-            Err(e)=>{
-                println!("Error {}",e);
+            Err(e) => {
+                println!("Error {}", e);
                 continue;
             }
         };

@@ -23,21 +23,27 @@ impl DnDItem {
         self.data.insert(name, v);
     }
 
-    pub fn add_data(&mut self,name:String,v:Value){
+    pub fn add_data(&mut self, name: String, v: Value) {
         let s = self.data.remove(&name);
         match s {
             None => self.data.insert(name, v),
             Some(old) => self.data.insert(name, old + v),
         };
     }
-    pub fn sub_data(&mut self,name:String,v:Value){
+    pub fn sub_data(&mut self, name: String, v: Value) {
         let s = self.data.remove(&name);
         match s {
             None => self.data.insert(name, v),
             Some(old) => self.data.insert(name, old - v),
         };
     }
-    
+
+    pub fn gain_item(&mut self, name: String, n: i32) {
+        let s = self.items.remove(&name).unwrap_or(0) + n;
+        if s != 0 {
+            self.items.insert(name, s);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -84,6 +90,10 @@ impl DnData {
                     .ok_or(ActionError::new("no item"))?
                     .sub_data(n, v);
             }
+            Action::GainItem(i, n) => self
+                .current_item()
+                .ok_or(ActionError::new("no item"))?
+                .gain_item(i, n),
             _ => {}
         };
         Ok(())

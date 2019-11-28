@@ -2,6 +2,7 @@ use crate::error::ParseError;
 use crate::token::{Token, Tokenizer};
 use std::ops::{Add, Sub};
 use std::str::FromStr;
+use crate::prev_iter::LineCounter;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
@@ -90,7 +91,7 @@ impl Expr {
         }
     }
 
-    pub fn from_tokens(it: &mut Tokenizer) -> Result<Expr, ParseError> {
+    pub fn from_tokens<T:Iterator<Item=Token>+LineCounter>(it: &mut T) -> Result<Expr, ParseError> {
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
@@ -100,24 +101,19 @@ impl Expr {
                         let plen = parts.len();
                         parts
                             .get_mut(plen - 1)
-                            .ok_or(ParseError::new("Cannot start with dot", it.line_no))?
+                            .ok_or(it.err("Cannot start with dot"))?
                             .push_ident(&s)
-                            .map_err(|p| p.set_line(it.line_no))?;
+                            .map_err(|p| p.set_line(it.line()))?;
                     }
                     None | Some(_) => {
-                        return Err(ParseError::new("Expected idend after dot", it.line_no))
+                        return Err(it.err("Expected idend after dot"))
                     }
                 },
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
                 Token::Add | Token::Sub | Token::Mul | Token::Div => parts.push(Expr::Op(t)),
                 Token::Num(n) => parts.push(Expr::Num(n)),
-                _ => {
-                    return Err(ParseError::new(
-                        "Unexptected token in expression",
-                        it.line_no,
-                    ))
-                }
+                _ => return Err(it.err("Unexptected token in expression")),
             }
         }
 
