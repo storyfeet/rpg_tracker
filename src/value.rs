@@ -1,116 +1,76 @@
-use crate::error::ParseError;
+use crate::error::{ParseError,ActionError};
 use crate::expr::Expr;
 use crate::prev_iter::LineCounter;
 use crate::token::Token;
-use std::ops::{Add, Sub};
+use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
-    Null,
     Ex(Expr),
     Str(String),
     List(Vec<String>),
+    Tree(BTreeMap<String,Value>),
 }
 
-impl Add for Value {
-    type Output = Value;
-    fn add(self, rhs: Value) -> Value {
-        use Value::*;
+impl Value {
+    //Error in this case is the Proto value, so follow that pointer
+    fn get_path<'a,T:Iterator<Item=&'a str>>(&'a self, mut i:T)->Result<&'a Value,String>{ 
+        match i.next(){
+            None => Ok(self),
+            Some(p) => match self{
+                Value::Tree(mp)=>mp.get(p).ok_or("TODO_PROTO".get_path(i),
+                _=>Err("TODO_PROTO".to_string())
+
+            }
+        }
         match self {
-            Null => rhs,
-            Ex(mut a) => match rhs {
-                Null => Ex(a),
-                Ex(b) => Ex(a + b),
-                Str(b) => Ex(a + Expr::Ident(b)),
-                List(bb) => {
-                    for b in bb {
-                        a = a + Expr::Ident(b);
-                    }
-                    Ex(a)
-                }
-            },
-            Str(mut a) => match rhs {
-                Null => Str(a),
-                Ex(b) => {
-                    a.push_str(&format!("{:?}", b));
-                    Str(a)
-                }
-                Str(b) => {
-                    a.push_str(&b.to_string());
-                    Str(a)
-                }
-                List(bb) => {
-                    for b in bb {
-                        a.push_str(&b)
-                    }
-                    Str(a)
-                }
-            },
-            List(mut a) => match rhs {
-                Null => List(a),
-                Ex(b) => {
-                    a.push(format!("{:?}", b));
-                    List(a)
-                }
-                Str(b) => {
-                    a.push(b);
-                    List(a)
-                }
-                List(b) => {
-                    a.extend(b);
-                    List(a)
-                }
-            },
+
         }
     }
-}
 
-impl Sub for Value {
-    type Output = Value;
-    fn sub(self, rhs: Value) -> Value {
+    fn try_add(self, rhs: Value) -> Result<Value,ActionError> {
         use Value::*;
         match self {
-            Null => Null,
             Ex(mut a) => match rhs {
-                Null => Ex(a),
-                Ex(b) => Ex(a - b),
-                Str(b) => Ex(a - Expr::Ident(b)),
-                List(bb) => {
-                    for b in bb {
-                        a = a - Expr::Ident(b);
-                    }
-                    Ex(a)
-                }
+                Ex(b) => Ok(Ex(a + b)),
+                _=>Err(ActionError::new("Cannot add non Expression to Expression"))
+                
             },
             Str(mut a) => match rhs {
-                Null => Null,
-                Ex(_) => Null,
                 Str(b) => {
                     a.push_str(&b.to_string());
-                    Str(a)
+                    Ok(Str(a))
                 }
-                List(bb) => {
-                    for b in bb {
-                        a.push_str(&b)
-                    }
-                    Str(a)
-                }
+                _=> Err(ActionError::new("Cannot add non str to str")),
             },
             List(mut a) => match rhs {
-                Null => Null,
-                Ex(b) => {
-                    a.push(format!("{:?}", b));
-                    List(a)
-                }
                 Str(b) => {
                     a.push(b);
-
-                    List(a)
+                    Ok(List(a))
                 }
                 List(b) => {
                     a.extend(b);
-                    List(a)
+                    Ok(List(a))
                 }
+                _=>Err(ActionError::new("Can only add list or string to list")),
+            },
+            Tree(_)=>Err(ActionError::new("Currently cannot add trees")),
+        }
+    }
+
+
+    fn try_sub(self, rhs: Value) ->Result< Value,ActionError> {
+        use Value::*;
+        match self {
+            Ex(mut a) => match rhs {
+                Ex(b) => Ok(Ex(a - b)),
+                _=>Err(ActionError::new("Can only sub Ex from Ex")),
+            }
+            Str(mut a) => Err(ActionError::new("Cannot subtract from string")),
+            List(mut a) => match rhs {
+                Str(b) => Ok(List(a.into_iter().filter(|x|x != &b).collect())),
+                
+                List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect()))
             },
         }
     }
