@@ -94,7 +94,6 @@ impl DnData {
                 .current_item()
                 .ok_or(ActionError::new("no item"))?
                 .gain_item(i, n),
-            _ => {}
         };
         Ok(())
     }

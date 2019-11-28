@@ -1,8 +1,8 @@
 use crate::error::ParseError;
 use crate::expr::Expr;
-use crate::token::{Token };
+use crate::prev_iter::LineCounter;
+use crate::token::Token;
 use std::ops::{Add, Sub};
-use crate::prev_iter::{LineCounter};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -129,7 +129,9 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn from_tokens<T: Iterator<Item = Token>+LineCounter>(t: &mut T) -> Result<Self, ParseError> {
+    pub fn from_tokens<T: Iterator<Item = Token> + LineCounter>(
+        t: &mut T,
+    ) -> Result<Self, ParseError> {
         match t.next() {
             None => Err(t.err("UX-EOF")),
             Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
@@ -140,7 +142,7 @@ impl Value {
                         Token::Qoth(s) | Token::Ident(s) => rlist.push(s),
                         Token::Num(n) => rlist.push(n.to_string()),
                         Token::SBClose => return Ok(Value::List(rlist)),
-                        Token::Comma=>{},
+                        Token::Comma => {}
                         e => return Err(t.err(&format!("UX - {:?}", e))),
                     }
                 }
@@ -153,23 +155,36 @@ impl Value {
     }
 }
 
-pub struct VIter<'a>{
-    v:&'a Value,
-    n:usize,
+pub struct VIter<'a> {
+    v: &'a Value,
+    n: usize,
 }
-/*
-impl Iterator for VIter
 
-impl<'a> IntoIterator for &'a Value{
-    type IntoIter = std::slice::Iter;
-    type Item = &'a str;
-    fn into_iter(self)->Self::IntoIter{
-        
+impl<'a> Iterator for VIter<'a> {
+    type Item = String;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.v {
+            Value::Str(s) => {
+                if self.n > 0 {
+                    return None;
+                }
+                self.n += 1;
+                Some(s.to_string())
+            }
+            Value::List(l) => {
+                let m = self.n;
+                self.n += 1;
+                l.get(m).map(|s| s.to_string())
+            }
+            _ => None,
+        }
     }
 }
 
-impl Iterator for Value{
-    type Item=String;
-    fn next(&mut self
+impl<'a> IntoIterator for &'a Value {
+    type IntoIter = VIter<'a>;
+    type Item = String;
+    fn into_iter(self) -> Self::IntoIter {
+        VIter { v: self, n: 0 }
+    }
 }
-*/
