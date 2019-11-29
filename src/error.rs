@@ -21,7 +21,7 @@ impl ParseError {
     }
 }
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Fail, Clone)]
 #[fail(display = "Action Error: {}", mess)]
 pub struct ActionError {
     mess: String,

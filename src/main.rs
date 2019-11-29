@@ -3,6 +3,7 @@ mod error;
 mod expr;
 mod parse;
 mod prev_iter;
+mod proto;
 mod token;
 mod value;
 
