@@ -1,4 +1,4 @@
-use crate::error::{ParseError,ActionError};
+use crate::error::{ActionError, ParseError};
 use crate::expr::Expr;
 use crate::prev_iter::LineCounter;
 use crate::token::Token;
@@ -9,39 +9,54 @@ pub enum Value {
     Ex(Expr),
     Str(String),
     List(Vec<String>),
-    Tree(BTreeMap<String,Value>),
+    Tree(BTreeMap<String, Value>),
+}
+
+#[derive(Debug)]
+pub enum GotPath<'a> {
+    Val(&'a Value),
+    Proto(String),
+    None,
 }
 
 impl Value {
     //Error in this case is the Proto value, so follow that pointer
-    fn get_path<'a,T:Iterator<Item=&'a str>>(&'a self, mut i:T)->Result<&'a Value,String>{ 
-        match i.next(){
-            None => Ok(self),
-            Some(p) => match self{
-                Value::Tree(mp)=>mp.get(p).ok_or("TODO_PROTO".get_path(i),
-                _=>Err("TODO_PROTO".to_string())
-
-            }
-        }
-        match self {
-
+    fn get_path<'a, T: Iterator<Item = &'a str>>(&'a self, mut i: T) -> GotPath<'a> {
+        match i.next() {
+            None => GotPath::Val(self),
+            Some(p) => match self {
+                Value::Tree(mp) => match mp.get(p) {
+                    Some(ch) => return ch.get_path(i),
+                    None => match mp.get("proto") {
+                        Some(Value::Str(s)) => {
+                            let res = s.clone();
+                            for cs in i {
+                                res.push('.');
+                                res.push_str(&cs);
+                            }
+                            GotPath::Proto(res)
+                        }
+                        None => return GotPath::None,
+                    },
+                },
+                _ => GotPath::None,
+            },
         }
     }
 
-    fn try_add(self, rhs: Value) -> Result<Value,ActionError> {
+    fn try_add(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
             Ex(mut a) => match rhs {
                 Ex(b) => Ok(Ex(a + b)),
-                _=>Err(ActionError::new("Cannot add non Expression to Expression"))
-                
+                _ => Err(ActionError::new("Cannot add non Expression to Expression")),
             },
             Str(mut a) => match rhs {
                 Str(b) => {
                     a.push_str(&b.to_string());
                     Ok(Str(a))
                 }
-                _=> Err(ActionError::new("Cannot add non str to str")),
+                _ => Err(ActionError::new("Cannot add non str to str")),
             },
             List(mut a) => match rhs {
                 Str(b) => {
@@ -52,25 +67,24 @@ impl Value {
                     a.extend(b);
                     Ok(List(a))
                 }
-                _=>Err(ActionError::new("Can only add list or string to list")),
+                _ => Err(ActionError::new("Can only add list or string to list")),
             },
-            Tree(_)=>Err(ActionError::new("Currently cannot add trees")),
+            Tree(_) => Err(ActionError::new("Currently cannot add trees")),
         }
     }
 
-
-    fn try_sub(self, rhs: Value) ->Result< Value,ActionError> {
+    fn try_sub(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
             Ex(mut a) => match rhs {
                 Ex(b) => Ok(Ex(a - b)),
-                _=>Err(ActionError::new("Can only sub Ex from Ex")),
-            }
+                _ => Err(ActionError::new("Can only sub Ex from Ex")),
+            },
             Str(mut a) => Err(ActionError::new("Cannot subtract from string")),
             List(mut a) => match rhs {
-                Str(b) => Ok(List(a.into_iter().filter(|x|x != &b).collect())),
-                
-                List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect()))
+                Str(b) => Ok(List(a.into_iter().filter(|x| x != &b).collect())),
+
+                List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
             },
         }
     }
