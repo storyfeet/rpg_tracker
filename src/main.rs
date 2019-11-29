@@ -34,7 +34,7 @@ fn main() -> Result<(), failure::Error> {
         //        println!(" -- {:?}", a);
         let a = match a {
             Ok(v) => {
-                println!(" OK {:?}", v);
+                //                println!(" OK {:?}", v);
                 v
             }
             Err(e) => {
@@ -45,6 +45,22 @@ fn main() -> Result<(), failure::Error> {
         if let Err(e) = data.do_action(a) {
             println!("Error {}", e);
         }
+    }
+
+    loop  {
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input)?;
+        if input == "quit\n" {
+            break;
+        }
+
+        for a in parse::ActionReader::new(&input){
+            match a{
+                Ok(ac)=>{data.do_action(ac);}
+                Err(e)=>println!("Error {:?}",e),
+            }
+        }
+
     }
 
     println!("{:?}", data);

@@ -1,5 +1,5 @@
-use crate::error::ParseError;
-use crate::prev_iter::{Prev,LineCounter};
+use crate::error::LineError;
+use crate::prev_iter::{LineCounter, Prev};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
@@ -9,6 +9,7 @@ pub enum Token {
     Dot,
     Colon,
     Comma,
+    Dollar,
     Add,
     Sub,
     Mul,
@@ -23,17 +24,18 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn as_str_val(&self) -> Result<&str, ParseError> {
+    pub fn as_str_val(&self) -> Result<&str, LineError> {
         match self {
             Token::Ident(s) => Ok(s),
             Token::Qoth(s) => Ok(s),
-            _ => Err(ParseError::new(&format!("{:?} not a string type", self), 0)),
+            _ => Err(LineError::new(&format!("{:?} not a string type", self), 0)),
         }
     }
 
     pub fn special_char(c: char) -> Option<Token> {
         match c {
             '#' => Some(Token::Hash),
+            '$' => Some(Token::Dollar),
             ':' => Some(Token::Colon),
             '.' => Some(Token::Dot),
             '+' => Some(Token::Add),
@@ -125,8 +127,8 @@ impl<'a> Tokenizer<'a> {
     }
 }
 
-impl<'a> LineCounter for Tokenizer<'a>{
-    fn line(&self)->usize{
+impl<'a> LineCounter for Tokenizer<'a> {
+    fn line(&self) -> usize {
         self.line_no
     }
 }
@@ -139,13 +141,16 @@ impl<'a> Iterator for Tokenizer<'a> {
             c = self.it.next()?;
         }
         if let Some(r) = Token::special_char(c) {
+            if c == '\n' {
+                self.line_no += 1;
+            }
             return Some(r);
         }
 
         let res = match c {
             '"' => self.read_qoth(),
 
-            v if v >= '0' && v <= '9' =>{
+            v if v >= '0' && v <= '9' => {
                 self.it.back();
                 Token::Num(self.read_num())
             }
@@ -175,16 +180,18 @@ mod test_tokens {
     }
 
     #[test]
-    pub fn test_qoth(){
+    pub fn test_qoth() {
         let mut tk = Tokenizer::new(r#"hello:"Goodbye","Nice","to \"meet\" you""#);
-        assert_eq!(tk.next().unwrap(),Token::Ident("hello".to_string()));
-        assert_eq!(tk.next().unwrap(),Token::Colon);
-        assert_eq!(tk.next().unwrap(),Token::Qoth("Goodbye".to_string()));
-        assert_eq!(tk.next().unwrap(),Token::Comma);
-        assert_eq!(tk.next().unwrap(),Token::Qoth("Nice".to_string()));
-        assert_eq!(tk.next().unwrap(),Token::Comma);
-        assert_eq!(tk.next().unwrap(),Token::Qoth("to \"meet\" you".to_string()));
+        assert_eq!(tk.next().unwrap(), Token::Ident("hello".to_string()));
+        assert_eq!(tk.next().unwrap(), Token::Colon);
+        assert_eq!(tk.next().unwrap(), Token::Qoth("Goodbye".to_string()));
+        assert_eq!(tk.next().unwrap(), Token::Comma);
+        assert_eq!(tk.next().unwrap(), Token::Qoth("Nice".to_string()));
+        assert_eq!(tk.next().unwrap(), Token::Comma);
+        assert_eq!(
+            tk.next().unwrap(),
+            Token::Qoth("to \"meet\" you".to_string())
+        );
         assert!(tk.next().is_none());
     }
-
 }

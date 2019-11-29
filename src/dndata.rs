@@ -1,7 +1,6 @@
-use crate::error::ActionError;
-use crate::parse::Action;
+use crate::parse::{Action, LineAction};
 use crate::proto::Proto;
-use crate::value::{GotPath, Value};
+use crate::value::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
@@ -13,26 +12,66 @@ pub struct DnData {
 impl DnData {
     pub fn new() -> Self {
         DnData {
-            curr: Proto::empty(),
+            curr: Proto::empty(false),
             data: Value::Tree(BTreeMap::new()),
         }
     }
 
-    pub fn do_action(&mut self, a: Action) -> Result<(), ActionError> {
-        match a {
-            Action::SetItem(name) => {
-                self.curr = Proto::new(&name);
+    pub fn do_action(&mut self, a: LineAction) -> Result<(), failure::Error> {
+        match a.action.clone() {
+            Action::Select(proto) => {
+                if proto.dot {
+                    self.curr.extend(proto.pp());
+                } else {
+                    self.curr = proto.clone();
+                }
                 match self.data.get_path(self.curr.pp()) {
-                    GotPath::Val(_) => {}
+                    Some(_) => {}
                     _ => {
-                        self.data.set_at_path(self.curr.pp(), Value::tree());
+                        self.data
+                            .set_at_path(self.curr.pp(), Value::tree())
+                            .map_err(|_| a.err("count not Create object for selct"))?;
                     }
                 }
             }
-            Action::SetStat(n, v) => {}
-            Action::AddStat(n, v) => {}
-            Action::SubStat(n, v) => {}
-            Action::GainItem(i, n) => {}
+            Action::Set(proto, v) => {
+                let pp = self.curr.extend_if_dot(&proto);
+                self.data
+                    .set_at_path(pp.pp(), v)
+                    .map_err(|_| a.err("Could not Set"))?;
+            }
+            Action::Add(proto, v) => {
+                let pp = self.curr.extend_if_dot(&proto);
+                match self.data.get_path(pp.pp()) {
+                    Some(ov) => {
+                        let nv = ov.clone().try_add(v)?;
+                        self.data
+                            .set_at_path(pp.pp(), nv)
+                            .map_err(|_| a.err("Could not Add"))?;
+                    }
+                    None => {
+                        self.data
+                            .set_at_path(pp.pp(), v)
+                            .map_err(|_| a.err("Coult not add"))?;
+                    }
+                }
+            }
+            Action::Sub(proto, v) => {
+                let pp = self.curr.extend_if_dot(&proto);
+                match self.data.get_path(pp.pp()) {
+                    Some(ov) => {
+                        let nv = ov.clone().try_sub(v)?;
+                        self.data
+                            .set_at_path(pp.pp(), nv)
+                            .map_err(|_| a.err("Could not Add"))?;
+                    }
+                    None => {
+                        self.data
+                            .set_at_path(pp.pp(), v)
+                            .map_err(|_| a.err("Coult not add"))?;
+                    }
+                }
+            }
         };
         Ok(())
     }

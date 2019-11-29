@@ -2,14 +2,14 @@ use failure_derive::*;
 
 #[derive(Debug, Fail)]
 #[fail(display = "Parse Error: line {} :{}", line, mess)]
-pub struct ParseError {
+pub struct LineError {
     mess: String,
     line: usize,
 }
 
-impl ParseError {
+impl LineError {
     pub fn new(s: &str, line: usize) -> Self {
-        ParseError {
+        LineError {
             mess: s.to_string(),
             line,
         }

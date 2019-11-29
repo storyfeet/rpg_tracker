@@ -1,4 +1,4 @@
-use crate::error::ParseError;
+use crate::error::LineError;
 use crate::token::{Token, Tokenizer};
 use std::ops::{Add, Sub};
 use std::str::FromStr;
@@ -44,7 +44,7 @@ impl Sub for Expr {
     }
 }
 impl FromStr for Expr {
-    type Err = ParseError;
+    type Err = LineError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut t = Tokenizer::new(s);
         let e = Self::from_tokens(&mut t)?;
@@ -74,13 +74,13 @@ impl Expr {
         }
     }
 
-    fn push_ident(&mut self, i: &str) -> Result<(), ParseError> {
+    fn push_ident(&mut self, i: &str) -> Result<(), LineError> {
         if let Expr::Ident(ref mut s) = self {
             s.push('.');
             s.push_str(i);
             return Ok(());
         }
-        Err(ParseError::new("Cannot add dotted ident to non ident", 0))
+        Err(LineError::new("Cannot add dotted ident to non ident", 0))
     }
 
     pub fn neg(self) -> Self {
@@ -91,7 +91,7 @@ impl Expr {
         }
     }
 
-    pub fn from_tokens<T:Iterator<Item=Token>+LineCounter>(it: &mut T) -> Result<Expr, ParseError> {
+    pub fn from_tokens<T:Iterator<Item=Token>+LineCounter>(it: &mut T) -> Result<Expr, LineError> {
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
@@ -127,7 +127,7 @@ impl Expr {
         Ok(p[0].clone())
     }
 
-    pub fn split_op<IT, F>(i: IT, t: Token, f: F) -> Result<Vec<Expr>, ParseError>
+    pub fn split_op<IT, F>(i: IT, t: Token, f: F) -> Result<Vec<Expr>, LineError>
     where
         IT: IntoIterator<Item = Expr> + std::fmt::Debug,
         F: Fn(Expr, Expr) -> Expr,
@@ -141,9 +141,9 @@ impl Expr {
             if p == Expr::Op(t.clone()) {
                 a = Some(f(
                     a.take()
-                        .ok_or(ParseError::new("nothing berfore the *", 0))?,
+                        .ok_or(LineError::new("nothing berfore the *", 0))?,
                     pit.next()
-                        .ok_or(ParseError::new("Nothing after the *", 0))?,
+                        .ok_or(LineError::new("Nothing after the *", 0))?,
                 ));
             } else {
                 if let Some(prev) = a {
