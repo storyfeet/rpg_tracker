@@ -1,3 +1,4 @@
+mod action;
 mod dndata;
 mod error;
 mod expr;
@@ -47,20 +48,21 @@ fn main() -> Result<(), failure::Error> {
         }
     }
 
-    loop  {
+    loop {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         if input == "quit\n" {
             break;
         }
 
-        for a in parse::ActionReader::new(&input){
-            match a{
-                Ok(ac)=>{data.do_action(ac);}
-                Err(e)=>println!("Error {:?}",e),
+        for a in parse::ActionReader::new(&input) {
+            match a {
+                Ok(ac) => {
+                    data.do_action(ac);
+                }
+                Err(e) => println!("Error {:?}", e),
             }
         }
-
     }
 
     println!("{:?}", data);

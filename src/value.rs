@@ -166,6 +166,7 @@ impl Value {
             Some(Token::Ident(s)) | Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
             Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(t))),
+            Some(Token::Colon)=>Ok(Value::Command(
             Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
