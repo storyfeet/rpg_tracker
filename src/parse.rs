@@ -1,7 +1,7 @@
 use crate::error::LineError;
-use crate::prev_iter::{LineCounter, Prev};
+use crate::prev_iter::{Backer,LineCounter };
 use crate::proto::Proto;
-use crate::token::{Token, Tokenizer};
+use crate::token::{Token, TokPrev};
 use crate::value::Value;
 
 #[derive(Debug, Clone)]
@@ -25,7 +25,7 @@ pub enum Action {
 }
 
 pub struct ActionReader<'a> {
-    it: Prev<Token, Tokenizer<'a>>,
+    it:TokPrev<'a>
 }
 
 impl<'a> LineCounter for ActionReader<'a> {
@@ -39,7 +39,7 @@ impl<'a> LineCounter for ActionReader<'a> {
 impl<'a> ActionReader<'a> {
     pub fn new(s: &'a str) -> Self {
         ActionReader {
-            it: Prev::new(Tokenizer::new(s)),
+            it:TokPrev::new(s) 
         }
     }
 }
@@ -88,6 +88,7 @@ impl<'a> ActionReader<'a> {
             Some(Token::Add) => Ok(Action::Add(p, Value::from_tokens(&mut self.it)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Value::from_tokens(&mut self.it)?)),
             e => Err(self.err(&format!("Ux - {:?} - after ident", e))),
+            Some(Token::BOpen)=> Ok(Action::CallFunc(
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::error::LineError;
-use crate::prev_iter::{LineCounter, Prev};
+use crate::prev_iter::{Backer, LineCounter, Prev};
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Token {
@@ -162,6 +162,35 @@ impl<'a> Iterator for Tokenizer<'a> {
 
         self.prev = Some(res.clone());
         Some(res)
+    }
+}
+
+pub struct TokPrev<'a> {
+    it: Prev<Token, Tokenizer<'a>>,
+}
+
+impl<'a> TokPrev<'a>{
+    pub fn new(s:&'a str)->Self{
+        TokPrev{it:Prev::new(Tokenizer::new(s))}
+    }
+}
+
+impl<'a> Iterator for TokPrev<'a> {
+    type Item = Token;
+    fn next(&mut self) -> Option<Token> {
+        return self.it.next();
+    }
+}
+
+impl<'a> Backer for TokPrev<'a> {
+    fn back(&mut self) {
+        self.it.back();
+    }
+}
+
+impl<'a> LineCounter for TokPrev<'a> {
+    fn line(&self) -> usize {
+        self.it.line()
     }
 }
 

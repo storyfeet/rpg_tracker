@@ -1,11 +1,11 @@
 use crate::error::{ActionError, LineError};
 use crate::expr::Expr;
+use crate::parse::Action;
+use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
 use crate::token::Token;
 use std::collections::BTreeMap;
-use crate::parse::Action;
-use crate::prev_iter::Backer;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -15,6 +15,7 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
     Action(Box<Action>),
+    FuncDef(Vec<String>, Vec<Value>),
 }
 
 impl Value {
@@ -24,7 +25,7 @@ impl Value {
     pub fn num(n: i32) -> Self {
         Value::Ex(Expr::Num(n))
     }
-    pub fn str(s:&str)->Self{
+    pub fn str(s: &str) -> Self {
         Value::Str(s.to_string())
     }
     //Error in this case is the Proto value, so follow that pointer
@@ -116,7 +117,7 @@ impl Value {
                     Ok(List(a))
                 }
             },
-            u => Err(ActionError::new(&format!("Add of {:?} not suppported",u))),
+            u => Err(ActionError::new(&format!("Add of {:?} not suppported", u))),
         }
     }
 
@@ -129,7 +130,6 @@ impl Value {
             },
             Str(_) => Err(ActionError::new("Cannot subtract from string")),
             List(a) => match rhs {
-
                 List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
                 _ => Err(ActionError::new("Cannot subtract non list from List")),
             },
@@ -140,7 +140,7 @@ impl Value {
                 }
                 _ => Err(ActionError::new("Can only sub str from tree")),
             },
-            u => Err(ActionError::new(&format!("Sub of {:?} not suppported",u))),
+            u => Err(ActionError::new(&format!("Sub of {:?} not suppported", u))),
         }
     }
 }
@@ -158,7 +158,7 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn from_tokens<T: Iterator<Item = Token> + LineCounter +Backer>(
+    pub fn from_tokens<T: Iterator<Item = Token> + LineCounter + Backer>(
         t: &mut T,
     ) -> Result<Self, LineError> {
         match t.next() {
@@ -197,13 +197,13 @@ impl<'a> Iterator for VIter<'a> {
     type Item = Value;
     fn next(&mut self) -> Option<Self::Item> {
         match self.v {
-            Value::Tree(_)=>{
+            Value::Tree(_) => {
                 return None;
             }
             Value::List(l) => {
                 let m = self.n;
                 self.n += 1;
-                l.get(m).map(|v|v.clone())
+                l.get(m).map(|v| v.clone())
             }
             _ => {
                 if self.n > 0 {
