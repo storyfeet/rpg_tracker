@@ -1,7 +1,7 @@
 use crate::error::LineError;
-use crate::prev_iter::{Backer,LineCounter };
+use crate::prev_iter::{Backer, LineCounter};
 use crate::proto::Proto;
-use crate::token::{Token, TokPrev};
+use crate::token::{TokPrev, Token};
 use crate::value::Value;
 
 #[derive(Debug, Clone)]
@@ -11,12 +11,12 @@ pub struct LineAction {
 }
 
 impl LineAction {
-    pub fn err(&self,s:&str)->LineError{
-        LineError::new(&format!("{:?}:{}",self.action,s),self.line)
+    pub fn err(&self, s: &str) -> LineError {
+        LineError::new(&format!("{:?}:{}", self.action, s), self.line)
     }
 }
 
-#[derive(Debug, Clone,PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Select(Proto),
     Add(Proto, Value),
@@ -25,7 +25,7 @@ pub enum Action {
 }
 
 pub struct ActionReader<'a> {
-    it:TokPrev<'a>
+    it: TokPrev<'a>,
 }
 
 impl<'a> LineCounter for ActionReader<'a> {
@@ -39,8 +39,12 @@ impl<'a> LineCounter for ActionReader<'a> {
 impl<'a> ActionReader<'a> {
     pub fn new(s: &'a str) -> Self {
         ActionReader {
-            it:TokPrev::new(s) 
+            it: TokPrev::new(s),
         }
+    }
+
+    pub fn done(self) -> TokPrev<'a> {
+        self.it
     }
 }
 
@@ -88,7 +92,6 @@ impl<'a> ActionReader<'a> {
             Some(Token::Add) => Ok(Action::Add(p, Value::from_tokens(&mut self.it)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Value::from_tokens(&mut self.it)?)),
             e => Err(self.err(&format!("Ux - {:?} - after ident", e))),
-            Some(Token::BOpen)=> Ok(Action::CallFunc(
         }
     }
 }

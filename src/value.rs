@@ -4,7 +4,7 @@ use crate::parse::Action;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
-use crate::token::Token;
+use crate::token::{TokPrev,Token};
 use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -14,8 +14,7 @@ pub enum Value {
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
-    Action(Box<Action>),
-    FuncDef(Vec<String>, Vec<Value>),
+    FuncDef(Vec<String>, Vec<Action>),
 }
 
 impl Value {
@@ -158,12 +157,29 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn from_tokens<T: Iterator<Item = Token> + LineCounter + Backer>(
-        t: &mut T,
+    pub fn func_def(t:&mut TokPrev)->Result<Self,LineError>{
+        //loop params
+        if t.next() != Some(Token::BOpen){
+            return Err(t.err("Func should start with '('"));
+        }
+        while let Some(tk) = t.next(){
+            match tk {
+            }
+        }
+
+        //loop actions
+    }
+
+    pub fn from_tokens(
+        t: &mut TokPrev,
     ) -> Result<Self, LineError> {
         match t.next() {
             None => Err(t.err("UX-EOF")),
-            Some(Token::Ident(s)) | Some(Token::Qoth(s)) => Ok(Value::Str(s)),
+            Some(Token::Qoth(s))=>Ok(Value::Str(s)),
+            Some(Token::Ident(s)) =>match s.as_ref(){
+                "func"=>Ok(Value::FuncDef(Vec::new(),Vec::new())),
+                sv=>Ok(Value::str(sv)),
+            }
             Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
             Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(t))),
             Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
