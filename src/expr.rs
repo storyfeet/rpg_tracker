@@ -1,11 +1,11 @@
-use crate::error::{LineError,ActionError};
+use crate::dndata::DnData;
+use crate::error::{ActionError, LineError};
 use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
 use crate::token::{TokPrev, Token};
-use std::ops::{Add, Sub,Div,Mul};
-use std::str::FromStr;
-use crate::dndata::DnData;
 use crate::value::Value;
+use std::ops::{Add, Div, Mul, Sub};
+use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
@@ -86,15 +86,19 @@ impl FromStr for Expr {
 }
 
 impl Expr {
-    pub fn eval(&self, root: &mut DnData) -> Result<Value,failure::Error> {
+    pub fn eval(&self, root: &mut DnData) -> Result<Value, failure::Error> {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
-            Proto(p) => root.data.get_path(p.pp()).map(|v|v.clone()).ok_or(ActionError::new("no"))?,
+            Proto(p) => root
+                .data
+                .get_path(p.pp())
+                .map(|v| v.clone())
+                .ok_or(ActionError::new("no"))?,
             Add(a, b) => a.eval(root)?.try_add(b.eval(root)?)?,
             Sub(a, b) => a.eval(root)?.try_sub(b.eval(root)?)?,
             Mul(a, b) => a.eval(root)?.try_mul(b.eval(root)?)?,
-            Mul(a, b) => a.eval(root)?.try_div(b.eval(root)?)?,
+            Div(a, b) => a.eval(root)?.try_div(b.eval(root)?)?,
             Neg(a) => a.eval(root)?.try_neg()?,
             _ => Value::num(0),
         })

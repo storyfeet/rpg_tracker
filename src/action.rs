@@ -31,8 +31,8 @@ impl Action {
             .map_err(|p| p.set_line(t.line()))?
             .to_string();
         match sign {
-            Token::Add => Ok(Action::Add(Proto::one(&id, true), Value::num(n))),
-            Token::Sub => Ok(Action::Sub(Proto::one(&id, true), Value::num(n))),
+            Token::Add => Ok(Action::Add(Proto::one(&id, 1), Value::num(n))),
+            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1), Value::num(n))),
             _ => Err(t.err("Not Addable")),
         }
     }
@@ -43,23 +43,21 @@ impl Action {
             Some(Token::Equals) => Ok(Action::Set(p, Value::from_tokens(t)?)),
             Some(Token::Add) => Ok(Action::Add(p, Value::from_tokens(t)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Value::from_tokens(t)?)),
-            Some(Token::BOpen)=>  {
+            Some(Token::BOpen) => {
                 let mut params = Vec::new();
-                while let Some(tk) = t.next(){
-                    match tk{
-                        Token::Comma=>{},
-                        Token::BClose => {
-                            return Ok(Action::CallFunc(p,params))
-                        }
-                        _=>{
+                while let Some(tk) = t.next() {
+                    match tk {
+                        Token::Comma => {}
+                        Token::BClose => return Ok(Action::CallFunc(p, params)),
+                        _ => {
                             t.back();
                             params.push(Value::from_tokens(t)?);
                         }
                     }
                 }
-                return Err(t.eof())
+                return Err(t.eof());
             }
-            e => Err(t.ux(e,"after ident")),
+            e => Err(t.ux(e, "after ident")),
         }
     }
 

@@ -57,10 +57,11 @@ fn main() -> Result<(), failure::Error> {
 
         for a in parse::ActionReader::new(&input) {
             match a {
-                Ok(ac) => {
-                    data.do_action(ac);
-                }
-                Err(e) => println!("Error {:?}", e),
+                Ok(ac) => match data.do_action(ac) {
+                    Ok(v) => println!("{:?}", v),
+                    Err(e) => println!("Error {}", e),
+                },
+                Err(e) => println!("Error {}", e),
             }
         }
     }

@@ -84,33 +84,57 @@ impl<'a> ProtoP<'a> {
     }
 }
 
+#[derive(Debug)]
 pub struct ProtoStack {
     stack: Vec<Proto>,
     bstack: Vec<usize>,
 }
 
 impl ProtoStack {
-    pub fn set_curr(&mut self, p: Proto, on_bstack: bool) {
-        if on_bstack {
-            self.bstack.push(self.stack.len())
+    pub fn new()->Self{
+        ProtoStack{
+            stack:Vec::new(),
+            bstack:Vec::new(),
         }
-        self.stack.push(self.in_context(p));
+    }
+    pub fn set_curr(&mut self, p: Proto) {
+        let r = self.in_context(p);
+        self.stack.push(r);
     }
 
-    pub fn in_context(&self, p: Proto) -> Proto {
-        //TODO
-        p
+    pub fn save(&mut self){
+        self.bstack.push(self.stack.len()-1);
     }
 
-    pub fn curr(&self) -> &Proto {
+    pub fn restore(&mut self) {
+        if let Some(n) = self.bstack.pop() {
+            self.stack.split_off(n);
+        }
+    }
+
+    pub fn in_context(&mut self, p: Proto) -> Proto {
+        if self.stack.len() == 0 {
+            return p;
+        }
+        let base = match p.dots {
+            0 => return p,
+            1 => self.curr(),
+            2 => {
+                if let Some(n) = self.bstack.get(self.bstack.len() - 1) {
+                    &self.stack[*n]
+                } else {
+                    &self.stack[0]
+                }
+            }
+            _ => &self.stack[0],
+        };
+        base.extend_new(p.pp())
+    }
+
+    pub fn curr(&mut self) -> &Proto {
         if self.stack.len() == 0 {
             self.stack.push(Proto::empty(0));
         }
         &self.stack[self.stack.len() - 1]
-    }
-    pub fn roll_back(&mut self) {
-        if let Some(n) = self.bstack.pop() {
-            self.stack.split_off(n);
-        }
     }
 }
