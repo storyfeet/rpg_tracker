@@ -1,7 +1,6 @@
 use crate::action::Action;
 use crate::error::ActionError;
-use crate::parse::LineAction;
-use crate::proto::ProtoStack;
+use crate::proto::{Proto, ProtoP, ProtoStack};
 use crate::value::Value;
 use std::collections::BTreeMap;
 
@@ -9,6 +8,7 @@ use std::collections::BTreeMap;
 pub struct DnData {
     stack: ProtoStack,
     pub data: Value,
+    locals: Vec<Value>,
 }
 
 impl DnData {
@@ -16,17 +16,58 @@ impl DnData {
         DnData {
             stack: ProtoStack::new(),
             data: Value::Tree(BTreeMap::new()),
+            locals: Vec::new(),
         }
     }
 
-    pub fn do_action(&mut self, a: LineAction) -> Result<Value, failure::Error> {
+    pub fn save(&mut self) {
+        self.stack.save();
+        self.locals.push(Value::tree());
+    }
+    pub fn restore(&mut self) {
+        self.stack.restore();
+        self.locals.pop();
+    }
+
+    pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
+        if self.locals.len() == 0 {
+            return self.data.get_path(p);
+        }
+        let mut p2 = p.clone();
+        if let Some("var") = p2.next() {
+            let ln = self.locals.len();
+            return self.locals[ln - 1].get_path(p2);
+        }
+        self.data.get_path(p)
+    }
+
+    pub fn set_param(&mut self, k: &str, v: Value) {
+        let ln = self.locals.len();
+        self.locals[ln - 1]
+            .set_at_path(Proto::one(k, 0).pp(), v)
+            .ok();
+    }
+
+    pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ()> {
+        if self.locals.len() == 0 {
+            return self.data.set_at_path(p, v);
+        }
+        let mut p2 = p.clone();
+        if let Some("var") = p2.next() {
+            let ln = self.locals.len();
+            return self.locals[ln - 1].set_at_path(p2, v);
+        }
+        self.data.set_at_path(p, v)
+    }
+
+    pub fn do_action(&mut self, a: Action) -> Result<Option<Value>, failure::Error> {
         fn err(s: &str) -> ActionError {
             ActionError::new(s)
         };
-        match a.action {
+        match a {
             Action::Select(proto) => {
                 let np = self.stack.in_context(proto);
-                match self.data.get_path(np.pp()) {
+                match self.get_pp(np.pp()) {
                     Some(_) => {}
                     _ => {
                         self.data
@@ -38,54 +79,66 @@ impl DnData {
             }
             Action::Set(proto, v) => {
                 let np = self.stack.in_context(proto);
-                self.data
-                    .set_at_path(np.pp(), v)
+                self.set_pp(np.pp(), v)
                     .map_err(|_| err("Could not Set"))?;
             }
             Action::Add(proto, v) => {
                 let np = self.stack.in_context(proto);
-                match self.data.get_path(np.pp()) {
+                match self.get_pp(np.pp()) {
                     Some(ov) => {
                         let nv = ov.clone().try_add(v)?;
-                        self.data
-                            .set_at_path(np.pp(), nv)
-                            .map_err(|_| err("Could not Add"))?;
+                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.data
-                            .set_at_path(np.pp(), v)
-                            .map_err(|_| err("Coult not add"))?;
+                        self.set_pp(np.pp(), v).map_err(|_| err("Coult not add"))?;
                     }
                 }
             }
             Action::Sub(proto, v) => {
                 let np = self.stack.in_context(proto);
-                match self.data.get_path(np.pp()) {
+                match self.get_pp(np.pp()) {
                     Some(ov) => {
                         let nv = ov.clone().try_sub(v)?;
-                        self.data
-                            .set_at_path(np.pp(), nv)
-                            .map_err(|_| err("Could not Add"))?;
+                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.data
-                            .set_at_path(np.pp(), v)
-                            .map_err(|_|err("Coult not add"))?;
+                        self.set_pp(np.pp(), v).map_err(|_| err("Coult not add"))?;
                     }
                 }
             }
-            Action::Expr(e) => return Ok(e.eval(self)?),
-            Action::CallFunc(proto, _params) => {
+            Action::Expr(e) => return Ok(Some(e.eval(self)?)),
+            Action::CallFunc(proto, params) => {
                 //TODO work out how to pass params
                 let np = self.stack.in_context(proto);
-                self.stack.save();
-                if let Some(Value::FuncDef(_pnames, _actions)) = self.data.get_path(np.pp()) {
-                    //TODO
+                let (pnames,actions) = match self.get_pp(np.pp()){
+                    Some(Value::FuncDef(pn,ac)) =>
+                        (pn.clone(),ac.clone()),
+                    _=>return Err(err("func on notafunc").into()),
+
+                };
+                
+                self.save();
+                for p in 0..params.len(){
+                    if pnames.len() > p{
+                        self.set_param(&pnames[p],params[p].clone());
+                    }
                 }
 
-                self.stack.restore();
+                for a in actions {
+                    println!("func action {:?}", a);
+                    match self.do_action(a){
+                        Ok(Some(v))=>{
+                            self.restore();
+                            return Ok(Some(v))
+                        }
+                        Err(e)=>return Err(e),
+                        Ok(None)=>{},
+                    }
+                }
+                self.restore();
+
             }
         };
-        Ok(Value::num(0))
+        Ok(None)
     }
 }

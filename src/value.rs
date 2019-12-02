@@ -224,7 +224,6 @@ impl Value {
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Ident(s)) => match s.as_ref() {
                 "func" => {
-                    println!("func found {}", s);
                     Self::func_def(t)
                 }
                 "expr" => {
@@ -232,7 +231,6 @@ impl Value {
                     Ok(Value::FuncDef(Vec::new(),ev ))
                 }
                 sv => {
-                    println!("No func found {}", s);
                     Ok(Value::str(sv))
                 }
             },

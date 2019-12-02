@@ -61,6 +61,7 @@ impl Proto {
     }
 }
 
+#[derive(Clone)]
 pub struct ProtoP<'a> {
     v: &'a Vec<String>,
     pos: usize,
@@ -91,10 +92,10 @@ pub struct ProtoStack {
 }
 
 impl ProtoStack {
-    pub fn new()->Self{
-        ProtoStack{
-            stack:Vec::new(),
-            bstack:Vec::new(),
+    pub fn new() -> Self {
+        ProtoStack {
+            stack: Vec::new(),
+            bstack: Vec::new(),
         }
     }
     pub fn set_curr(&mut self, p: Proto) {
@@ -102,8 +103,8 @@ impl ProtoStack {
         self.stack.push(r);
     }
 
-    pub fn save(&mut self){
-        self.bstack.push(self.stack.len()-1);
+    pub fn save(&mut self) {
+        self.bstack.push(self.stack.len() - 1);
     }
 
     pub fn restore(&mut self) {

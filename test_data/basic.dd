@@ -24,7 +24,10 @@ Bill
     .Acc=($d3)
     .Speed+($d3+3 -$self.strength)
     .HP+5
-    .run=func(red,green,blue)[self.GP +5]
+    .run=func(red,green,blue)[
+        var.red.GP +5;
+        ($var.red.GP)
+    ]
     .items
     +10 GP
     +Tent

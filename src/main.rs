@@ -43,8 +43,8 @@ fn main() -> Result<(), failure::Error> {
                 continue;
             }
         };
-        if let Err(e) = data.do_action(a) {
-            println!("Error {}", e);
+        if let Err(e) = data.do_action(a.action) {
+            println!("Error {} at {}", e, a.line)
         }
     }
 
@@ -57,8 +57,9 @@ fn main() -> Result<(), failure::Error> {
 
         for a in parse::ActionReader::new(&input) {
             match a {
-                Ok(ac) => match data.do_action(ac) {
-                    Ok(v) => println!("{:?}", v),
+                Ok(ac) => match data.do_action(ac.action) {
+                    Ok(Some(v)) => println!("{:?}", v),
+                    Ok(None) => {}
                     Err(e) => println!("Error {}", e),
                 },
                 Err(e) => println!("Error {}", e),
