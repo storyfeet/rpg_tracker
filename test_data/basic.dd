@@ -12,18 +12,19 @@ Dagger
 Player
     .HP=10
     .Dam=0
-    .Health=(self.HP - self.Dam)
+    .Health=($self.HP - $self.Dam)
     .battle_view = [HP,Dam,Health]
 
 Bill
     .proto=$Player
         #another comment
     .HP=10
-    .weapons=[3,(d6+2),4,harold]
+    .weapons=[3,($d6+2),4,harold]
     .Str=5
-    .Acc=(d3)
-    .Speed+(d3+3 -p.strength)
+    .Acc=($d3)
+    .Speed+($d3+3 -$self.strength)
     .HP+5
+    .run=func(red,green,blue)[self.GP +5]
     .items
     +10 GP
     +Tent

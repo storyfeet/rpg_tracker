@@ -5,6 +5,7 @@ use failure_derive::*;
 pub struct LineError {
     mess: String,
     line: usize,
+    pub eof: bool,
 }
 
 impl LineError {
@@ -12,6 +13,15 @@ impl LineError {
         LineError {
             mess: s.to_string(),
             line,
+            eof: false,
+        }
+    }
+
+    pub fn eof(line: usize) -> Self {
+        LineError {
+            mess: "UX - EOF".to_string(),
+            line,
+            eof: true,
         }
     }
 

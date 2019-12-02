@@ -1,13 +1,17 @@
-use crate::error::LineError;
-use crate::token::{Token, Tokenizer};
-use std::ops::{Add, Sub};
-use std::str::FromStr;
+use crate::error::{LineError,ActionError};
 use crate::prev_iter::LineCounter;
+use crate::proto::Proto;
+use crate::token::{TokPrev, Token};
+use std::ops::{Add, Sub,Div,Mul};
+use std::str::FromStr;
+use crate::dndata::DnData;
+use crate::value::Value;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Num(i32),
-    Ident(String),
+    Proto(Proto),
+    Func(),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
@@ -43,44 +47,57 @@ impl Sub for Expr {
         }
     }
 }
+impl Mul for Expr {
+    type Output = Expr;
+    fn mul(self, rhs: Expr) -> Self::Output {
+        use Expr::*;
+        match self {
+            Num(a) => match rhs {
+                Num(b) => Num(a * b),
+                e => Mul(Box::new(Num(a)), Box::new(e)),
+            },
+            a => Mul(Box::new(a), Box::new(rhs)),
+        }
+    }
+}
+
+impl Div for Expr {
+    type Output = Expr;
+    fn div(self, rhs: Expr) -> Self::Output {
+        use Expr::*;
+        match self {
+            Num(a) => match rhs {
+                Num(0) => Num(0),
+                Num(b) => Num(a / b),
+                e => Mul(Box::new(Num(a)), Box::new(e)),
+            },
+            a => Mul(Box::new(a), Box::new(rhs)),
+        }
+    }
+}
+
 impl FromStr for Expr {
     type Err = LineError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut t = Tokenizer::new(s);
+        let mut t = TokPrev::new(s);
         let e = Self::from_tokens(&mut t)?;
         Ok(e)
     }
 }
 
 impl Expr {
-    fn eval(&self) -> i32 {
+    pub fn eval(&self, root: &mut DnData) -> Result<Value,failure::Error> {
         use Expr::*;
-        match self {
-            Num(n) => *n,
-            Ident(_) => 0, //TODO
-            Add(a, b) => a.eval() + b.eval(),
-            Sub(a, b) => a.eval() - b.eval(),
-            Mul(a, b) => a.eval() * b.eval(),
-            Div(a, b) => {
-                let bb = b.eval();
-                if bb == 0 {
-                    0
-                } else {
-                    a.eval() / bb
-                }
-            }
-            Neg(a) => -a.eval(),
-            _ => 0,
-        }
-    }
-
-    fn push_ident(&mut self, i: &str) -> Result<(), LineError> {
-        if let Expr::Ident(ref mut s) = self {
-            s.push('.');
-            s.push_str(i);
-            return Ok(());
-        }
-        Err(LineError::new("Cannot add dotted ident to non ident", 0))
+        Ok(match self {
+            Num(n) => Value::num(*n),
+            Proto(p) => root.data.get_path(p.pp()).map(|v|v.clone()).ok_or(ActionError::new("no"))?,
+            Add(a, b) => a.eval(root)?.try_add(b.eval(root)?)?,
+            Sub(a, b) => a.eval(root)?.try_sub(b.eval(root)?)?,
+            Mul(a, b) => a.eval(root)?.try_mul(b.eval(root)?)?,
+            Mul(a, b) => a.eval(root)?.try_div(b.eval(root)?)?,
+            Neg(a) => a.eval(root)?.try_neg()?,
+            _ => Value::num(0),
+        })
     }
 
     pub fn neg(self) -> Self {
@@ -91,24 +108,11 @@ impl Expr {
         }
     }
 
-    pub fn from_tokens<T:Iterator<Item=Token>+LineCounter>(it: &mut T) -> Result<Expr, LineError> {
+    pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
-                Token::Ident(s) => parts.push(Expr::Ident(s)),
-                Token::Dot => match it.next() {
-                    Some(Token::Ident(s)) => {
-                        let plen = parts.len();
-                        parts
-                            .get_mut(plen - 1)
-                            .ok_or(it.err("Cannot start with dot"))?
-                            .push_ident(&s)
-                            .map_err(|p| p.set_line(it.line()))?;
-                    }
-                    None | Some(_) => {
-                        return Err(it.err("Expected idend after dot"))
-                    }
-                },
+                Token::Dollar => parts.push(Expr::Proto(Proto::from_tokens(it))),
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
                 Token::Add | Token::Sub | Token::Mul | Token::Div => parts.push(Expr::Op(t)),
@@ -140,10 +144,8 @@ impl Expr {
         while let Some(p) = pit.next() {
             if p == Expr::Op(t.clone()) {
                 a = Some(f(
-                    a.take()
-                        .ok_or(LineError::new("nothing berfore the *", 0))?,
-                    pit.next()
-                        .ok_or(LineError::new("Nothing after the *", 0))?,
+                    a.take().ok_or(LineError::new("nothing berfore the *", 0))?,
+                    pit.next().ok_or(LineError::new("Nothing after the *", 0))?,
                 ));
             } else {
                 if let Some(prev) = a {

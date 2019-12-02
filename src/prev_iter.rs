@@ -1,10 +1,19 @@
 use crate::error::LineError;
+use std::fmt::Debug;
 
 pub trait LineCounter {
     fn line(&self) -> usize;
     fn err(&self, s: &str) -> LineError {
         LineError::new(s, self.line())
     }
+    fn ux<T: Debug>(&self, t: T, s: &str) -> LineError {
+        let fs = format!("UX - {:?} - {}", t, s);
+        LineError::new(&fs, self.line())
+    }
+    fn eof(&self)->LineError{
+        LineError::eof(self.line())
+    }
+
 }
 
 pub trait Backer {
@@ -16,10 +25,9 @@ where
     I: Clone,
     T: LineCounter + Iterator<Item = I>,
 {
-    fn back(&mut self){
+    fn back(&mut self) {
         self.is_back = true;
     }
-
 }
 
 impl<I, T> LineCounter for Prev<I, T>
@@ -67,6 +75,3 @@ impl<I: Clone, T: Iterator<Item = I>> Prev<I, T> {
         self.is_back = true
     }
 }
-
-
-

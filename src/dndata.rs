@@ -1,27 +1,30 @@
-use crate::parse::{Action, LineAction};
+use crate::action::Action;
+use crate::parse::LineAction;
 use crate::proto::Proto;
 use crate::value::Value;
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
 pub struct DnData {
-    curr: Proto,
-    data: Value,
+    call_stack:Vec<Proto>,
+    pub data: Value,
 }
+
 
 impl DnData {
     pub fn new() -> Self {
         DnData {
-            curr: Proto::empty(false),
+            call_stack:Vec::new(),
             data: Value::Tree(BTreeMap::new()),
         }
     }
 
-    pub fn do_action(&mut self, a: LineAction) -> Result<(), failure::Error> {
+
+    pub fn do_action(&mut self, a: LineAction) -> Result<Value, failure::Error> {
         match a.action.clone() {
             Action::Select(proto) => {
                 if proto.dot {
-                    self.curr.extend(proto.pp());
+                    self.extend_curr(proto.pp());
                 } else {
                     self.curr = proto.clone();
                 }
@@ -72,7 +75,10 @@ impl DnData {
                     }
                 }
             }
+            Action::Expr(e) => return Ok(e.eval(self)?),
+            Action::CallFunc(proto,params)=>{
+            }
         };
-        Ok(())
+        Ok(Value::num(0))
     }
 }

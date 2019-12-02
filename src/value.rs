@@ -1,10 +1,10 @@
+use crate::action::Action;
 use crate::error::{ActionError, LineError};
 use crate::expr::Expr;
-use crate::parse::Action;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
-use crate::token::{TokPrev,Token};
+use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -142,6 +142,31 @@ impl Value {
             u => Err(ActionError::new(&format!("Sub of {:?} not suppported", u))),
         }
     }
+
+    pub fn try_mul(self, rhs: Value) -> Result<Value, ActionError> {
+        match self {
+            Value::Ex(a) => match rhs {
+                Value::Ex(b) => Ok(Value::Ex(a * b)),
+                _ => Err(ActionError::new("No mul on non ex")),
+            },
+            _ => Err(ActionError::new("No mul on non ex")),
+        }
+    }
+    pub fn try_div(self, rhs: Value) -> Result<Value, ActionError> {
+        match self {
+            Value::Ex(a) => match rhs {
+                Value::Ex(b) => Ok(Value::Ex(a / b)),
+                _ => Err(ActionError::new("No mul on non ex")),
+            },
+            _ => Err(ActionError::new("No mul on non ex")),
+        }
+    }
+    pub fn try_neg(self) -> Result<Value, ActionError> {
+        match self {
+            Value::Ex(Expr::Num(v)) => Ok(Value::num(-v)),
+            _ => Err(ActionError::new("No neg non ex")),
+        }
+    }
 }
 
 impl From<String> for Value {
@@ -157,29 +182,60 @@ impl From<Expr> for Value {
 }
 
 impl Value {
-    pub fn func_def(t:&mut TokPrev)->Result<Self,LineError>{
-        //loop params
-        if t.next() != Some(Token::BOpen){
+    pub fn func_def(t: &mut TokPrev) -> Result<Self, LineError> {
+        //handle bracket
+        if t.next() != Some(Token::BOpen) {
             return Err(t.err("Func should start with '('"));
         }
-        while let Some(tk) = t.next(){
+
+        let mut params = Vec::new();
+        //loop params
+        while let Some(tk) = t.next() {
             match tk {
+                Token::Ident(s) => params.push(s),
+                Token::Comma | Token::Break => {}
+                Token::BClose => break,
+                e => return Err(t.err(&format!("Ux {:?} in func params", e))),
             }
         }
 
+        if t.next() != Some(Token::SBOpen) {
+            return Err(t.err("Func has nothing to do"));
+        }
+
+        let mut actions = Vec::new();
         //loop actions
+        while let Some(tk) = t.next() {
+            match tk {
+                Token::SBClose => break,
+                Token::Comma | Token::Break => {}
+                _ => {
+                    t.back();
+                    actions.push(Action::from_tokens(t)?);
+                }
+            }
+        }
+        Ok(Value::FuncDef(params, actions))
     }
 
-    pub fn from_tokens(
-        t: &mut TokPrev,
-    ) -> Result<Self, LineError> {
+    pub fn from_tokens(t: &mut TokPrev) -> Result<Self, LineError> {
         match t.next() {
             None => Err(t.err("UX-EOF")),
-            Some(Token::Qoth(s))=>Ok(Value::Str(s)),
-            Some(Token::Ident(s)) =>match s.as_ref(){
-                "func"=>Ok(Value::FuncDef(Vec::new(),Vec::new())),
-                sv=>Ok(Value::str(sv)),
-            }
+            Some(Token::Qoth(s)) => Ok(Value::Str(s)),
+            Some(Token::Ident(s)) => match s.as_ref() {
+                "func" => {
+                    println!("func found {}", s);
+                    Self::func_def(t)
+                }
+                "expr" => {
+                    let ev = vec![Action::Expr(Expr::from_tokens(t)?)];
+                    Ok(Value::FuncDef(Vec::new(),ev ))
+                }
+                sv => {
+                    println!("No func found {}", s);
+                    Ok(Value::str(sv))
+                }
+            },
             Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
             Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(t))),
             Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),

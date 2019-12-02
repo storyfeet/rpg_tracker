@@ -169,9 +169,11 @@ pub struct TokPrev<'a> {
     it: Prev<Token, Tokenizer<'a>>,
 }
 
-impl<'a> TokPrev<'a>{
-    pub fn new(s:&'a str)->Self{
-        TokPrev{it:Prev::new(Tokenizer::new(s))}
+impl<'a> TokPrev<'a> {
+    pub fn new(s: &'a str) -> Self {
+        TokPrev {
+            it: Prev::new(Tokenizer::new(s)),
+        }
     }
 }
 
@@ -185,6 +187,16 @@ impl<'a> Iterator for TokPrev<'a> {
 impl<'a> Backer for TokPrev<'a> {
     fn back(&mut self) {
         self.it.back();
+    }
+}
+
+impl<'a> TokPrev<'a> {
+    pub fn read_to_break(&mut self) {
+        while let Some(t) = self.next() {
+            if t == Token::Break {
+                return;
+            }
+        }
     }
 }
 
