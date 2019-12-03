@@ -86,13 +86,12 @@ impl FromStr for Expr {
 }
 
 impl Expr {
-    pub fn eval(&self, root: &mut DnData) -> Result<Value, failure::Error> {
+    pub fn eval(&self, root: &mut DnData) -> Result<Value, ActionError> {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
             Proto(p) => root
-                .data
-                .get_path(p.pp())
+                .get_pp(p.pp())
                 .map(|v| v.clone())
                 .ok_or(ActionError::new("no"))?,
             Add(a, b) => a.eval(root)?.try_add(b.eval(root)?)?,

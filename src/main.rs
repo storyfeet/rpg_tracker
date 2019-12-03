@@ -5,6 +5,7 @@ mod expr;
 mod parse;
 mod prev_iter;
 mod proto;
+mod stack;
 mod token;
 mod value;
 

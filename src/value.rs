@@ -6,9 +6,11 @@ use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
+use crate::dndata::DnData;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
+    Num(i32),
     Ex(Expr),
     Str(String),
     List(Vec<Value>),
@@ -26,6 +28,19 @@ impl Value {
     }
     pub fn str(s: &str) -> Self {
         Value::Str(s.to_string())
+    }
+
+    pub fn eval_expr(self,dd:&mut DnData)-> Result<Self,ActionError>{
+        match self{
+            Value::Ex(e)=>e.eval(dd),
+            _=>Ok(self),
+        }
+    }
+    pub fn has_child(&self,s:&str)->bool{
+        match self{
+            Value::Tree(t)=>t.get(s).is_some(),
+            _=>false,
+        }
     }
     //Error in this case is the Proto value, so follow that pointer
     pub fn get_path<'a>(&'a self, mut pp: ProtoP) -> Option<&'a Value> {
