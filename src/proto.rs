@@ -3,6 +3,7 @@ use crate::token::{Token, Tokenizer};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
     pub dots: i32,
+    pub derefs: i32,
     v: Vec<String>,
 }
 
@@ -10,13 +11,14 @@ impl Proto {
     pub fn empty(dots: i32) -> Self {
         Proto {
             dots,
+            derefs: 0,
             v: Vec::new(),
         }
     }
     pub fn one(s: &str, dots: i32) -> Self {
         let mut v = Vec::new();
         v.push(s.to_string());
-        Proto { dots, v }
+        Proto { dots, v, derefs: 0 }
     }
     pub fn new(s: &str) -> Self {
         let mut t = Prev::new(Tokenizer::new(s));
@@ -30,6 +32,11 @@ impl Proto {
                 Token::Dot => {
                     if res.v.len() == 0 {
                         res.dots += 1
+                    }
+                }
+                Token::Mul => {
+                    if res.v.len() == 0 {
+                        res.derefs += 1
                     }
                 }
                 Token::Qoth(s) | Token::Ident(s) => res.push(&s),
@@ -59,6 +66,12 @@ impl Proto {
         res.extend(pp);
         res
     }
+
+    pub fn with_deref(&self,n:i32)->Proto{
+        let mut res = self.clone();
+        res.derefs +=n;
+        res
+    }
 }
 
 #[derive(Clone)]
@@ -85,57 +98,3 @@ impl<'a> ProtoP<'a> {
     }
 }
 
-#[derive(Debug)]
-pub struct ProtoStack {
-    stack: Vec<Proto>,
-    bstack: Vec<usize>,
-}
-
-impl ProtoStack {
-    pub fn new() -> Self {
-        ProtoStack {
-            stack: Vec::new(),
-            bstack: Vec::new(),
-        }
-    }
-    pub fn set_curr(&mut self, p: Proto) {
-        let r = self.in_context(p);
-        self.stack.push(r);
-    }
-
-    pub fn save(&mut self) {
-        self.bstack.push(self.stack.len() - 1);
-    }
-
-    pub fn restore(&mut self) {
-        if let Some(n) = self.bstack.pop() {
-            self.stack.split_off(n);
-        }
-    }
-
-    pub fn in_context(&mut self, p: Proto) -> Proto {
-        if self.stack.len() == 0 {
-            return p;
-        }
-        let base = match p.dots {
-            0 => return p,
-            1 => self.curr(),
-            2 => {
-                if let Some(n) = self.bstack.get(self.bstack.len() - 1) {
-                    &self.stack[*n]
-                } else {
-                    &self.stack[0]
-                }
-            }
-            _ => &self.stack[0],
-        };
-        base.extend_new(p.pp())
-    }
-
-    pub fn curr(&mut self) -> &Proto {
-        if self.stack.len() == 0 {
-            self.stack.push(Proto::empty(0));
-        }
-        &self.stack[self.stack.len() - 1]
-    }
-}

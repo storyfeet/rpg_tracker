@@ -9,7 +9,7 @@ pub struct StackItem {
 }
 
 impl StackItem {
-    pub fn new(p: Proto)->Self {
+    pub fn new(p: Proto) -> Self {
         StackItem {
             base: p,
             curr: None,
@@ -21,13 +21,13 @@ impl StackItem {
         self.curr = Some(p)
     }
 
-    pub fn in_context(&self,p:&Proto)->Proto{
-        match p.dots{
-            0=> p.clone(),
-            1=> self.curr.as_ref().unwrap_or(&self.base).extend_new(p.pp()),
-            _=> self.base.extend_new(p.pp()),
-        }
+    pub fn in_context(&self, p: &Proto) -> Proto {
+        let mut res = match p.dots {
+            0 => p.clone(),
+            1 => self.curr.as_ref().unwrap_or(&self.base).extend_new(p.pp()),
+            _ => self.base.extend_new(p.pp()),
+        };
+        res.derefs = p.derefs;
+        res
     }
-
-
 }

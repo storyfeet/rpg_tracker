@@ -1,4 +1,5 @@
 use crate::action::Action;
+use crate::dndata::DnData;
 use crate::error::{ActionError, LineError};
 use crate::expr::Expr;
 use crate::prev_iter::Backer;
@@ -6,7 +7,6 @@ use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
-use crate::dndata::DnData;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -30,16 +30,16 @@ impl Value {
         Value::Str(s.to_string())
     }
 
-    pub fn eval_expr(self,dd:&mut DnData)-> Result<Self,ActionError>{
-        match self{
-            Value::Ex(e)=>e.eval(dd),
-            _=>Ok(self),
+    pub fn eval_expr(self, dd: &mut DnData) -> Result<Self, ActionError> {
+        match self {
+            Value::Ex(e) => e.eval(dd),
+            _ => Ok(self),
         }
     }
-    pub fn has_child(&self,s:&str)->bool{
-        match self{
-            Value::Tree(t)=>t.get(s).is_some(),
-            _=>false,
+    pub fn has_child(&self, s: &str) -> bool {
+        match self {
+            Value::Tree(t) => t.get(s).is_some(),
+            _ => false,
         }
     }
     //Error in this case is the Proto value, so follow that pointer
@@ -78,13 +78,13 @@ impl Value {
         &'a mut self,
         mut pp: ProtoP,
         mut v: Value,
-    ) -> Result<Option<Value>, ()> {
+    ) -> Result<Option<Value>, ActionError> {
         if pp.remaining() == 1 {
             if let Value::Tree(t) = self {
                 let rv = t.insert(pp.next().unwrap().to_string(), v);
                 return Ok(rv);
             }
-            return Err(());
+            return Err(ActionError::new("Cannot set child of a non tree"));
         }
 
         match pp.next() {
@@ -102,7 +102,7 @@ impl Value {
                         return res;
                     }
                 },
-                _ => return Err(()),
+                _ => return Err(ActionError::new("canot set child of non tree")),
             },
         }
     }
@@ -238,16 +238,12 @@ impl Value {
             None => Err(t.err("UX-EOF")),
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Ident(s)) => match s.as_ref() {
-                "func" => {
-                    Self::func_def(t)
-                }
+                "func" => Self::func_def(t),
                 "expr" => {
                     let ev = vec![Action::Expr(Expr::from_tokens(t)?)];
-                    Ok(Value::FuncDef(Vec::new(),ev ))
+                    Ok(Value::FuncDef(Vec::new(), ev))
                 }
-                sv => {
-                    Ok(Value::str(sv))
-                }
+                sv => Ok(Value::str(sv)),
             },
             Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
             Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(t))),

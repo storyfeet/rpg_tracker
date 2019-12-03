@@ -67,7 +67,7 @@ impl Action {
                 t.read_to_break();
                 return Self::from_tokens(t);
             }
-            Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
+            Token::Mul | Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
                 t.back();
                 let p = Proto::from_tokens(t);
                 Self::from_proto(p, t)
