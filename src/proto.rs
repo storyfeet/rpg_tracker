@@ -25,6 +25,14 @@ impl Proto {
         Self::from_tokens(&mut t)
     }
 
+    pub fn parent(&self) -> Self {
+        let mut res = self.clone();
+        if res.v.len() > 0 {
+            res.v.pop();
+        }
+        res
+    }
+
     pub fn from_tokens<T: Iterator<Item = Token> + Backer + LineCounter>(t: &mut T) -> Self {
         let mut res = Proto::empty(0);
         while let Some(v) = t.next() {
@@ -54,7 +62,11 @@ impl Proto {
     }
 
     pub fn pp<'a>(&'a self) -> ProtoP<'a> {
-        ProtoP { v: &self.v, pos: 0 }
+        ProtoP {
+            v: &self.v,
+            pos: 0,
+            stop: self.v.len(),
+        }
     }
 
     pub fn extend(&mut self, pp: ProtoP) {
@@ -67,17 +79,18 @@ impl Proto {
         res
     }
 
-    pub fn with_deref(&self,n:i32)->Proto{
+    pub fn with_deref(&self, n: i32) -> Proto {
         let mut res = self.clone();
-        res.derefs +=n;
+        res.derefs += n;
         res
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ProtoP<'a> {
     v: &'a Vec<String>,
     pos: usize,
+    stop: usize,
 }
 
 impl<'a> Iterator for ProtoP<'a> {
@@ -85,7 +98,7 @@ impl<'a> Iterator for ProtoP<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let n = self.pos;
         self.pos += 1;
-        if n >= self.v.len() {
+        if n >= self.stop {
             return None;
         }
         Some(&self.v[n])
@@ -94,7 +107,16 @@ impl<'a> Iterator for ProtoP<'a> {
 
 impl<'a> ProtoP<'a> {
     pub fn remaining(&self) -> usize {
+        if self.pos > self.v.len() {
+            return 0;
+        }
         self.v.len() - self.pos
     }
+    pub fn parent(&self) -> Self {
+        let mut res = self.clone();
+        if res.stop >= 1 {
+            res.stop -= 1;
+        }
+        res
+    }
 }
-

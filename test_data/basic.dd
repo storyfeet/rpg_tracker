@@ -25,7 +25,7 @@ Bill
     .Speed=23
     .HP+5
     .run=func(red)[
-        *red.GP +5;
+        red.GP+4
         ($red.GP)
     ]
     .items

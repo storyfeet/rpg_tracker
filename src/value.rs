@@ -19,6 +19,13 @@ pub enum Value {
     FuncDef(Vec<String>, Vec<Action>),
 }
 
+pub enum SetResult{
+    Ok(Option<Value>),
+    Deref(Proto,Value),
+    Err(ActionError),
+}
+
+
 impl Value {
     pub fn tree() -> Self {
         Value::Tree(BTreeMap::new())
@@ -42,8 +49,11 @@ impl Value {
             _ => false,
         }
     }
-    //Error in this case is the Proto value, so follow that pointer
-    pub fn get_path<'a>(&'a self, mut pp: ProtoP) -> Option<&'a Value> {
+
+    pub fn get_path<'a>(&'a self, pp: &mut ProtoP) -> Option<&'a Value> {
+        if let Value::Proto(_) = self{
+            return Some(self)
+        };
         match pp.next() {
             None => Some(self),
             Some(p) => match self {
@@ -78,19 +88,25 @@ impl Value {
         &'a mut self,
         mut pp: ProtoP,
         mut v: Value,
-    ) -> Result<Option<Value>, ActionError> {
+    ) -> SetResult{
         if pp.remaining() == 1 {
-            if let Value::Tree(t) = self {
-                let rv = t.insert(pp.next().unwrap().to_string(), v);
-                return Ok(rv);
+            match self{
+                Value::Tree(t)=>{
+                    let rv = t.insert(pp.next().unwrap().to_string(), v);
+                    return SetResult::Ok(rv);
+                }
+                Value::Proto(p)=>{
+                    return SetResult::Deref(p.extend_new(pp).with_deref(1),v);
+                }
+                _=>return SetResult::Err(ActionError::new("Cannot set child of a non tree")),
             }
-            return Err(ActionError::new("Cannot set child of a non tree"));
+            
         }
 
         match pp.next() {
             None => {
                 std::mem::swap(self, &mut v);
-                Ok(Some(v))
+                SetResult::Ok(Some(v))
             }
             Some(p) => match self {
                 Value::Tree(mp) => match mp.get_mut(p) {
@@ -102,7 +118,10 @@ impl Value {
                         return res;
                     }
                 },
-                _ => return Err(ActionError::new("canot set child of non tree")),
+                Value::Proto(p)=>{
+                    return SetResult::Deref(p.extend_new(pp).with_deref(1),v);
+                }
+                _ => return SetResult::Err(ActionError::new("canot set child of non tree")),
             },
         }
     }
