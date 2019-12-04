@@ -59,7 +59,7 @@ fn main() -> Result<(), failure::Error> {
         for a in parse::ActionReader::new(&input) {
             match a {
                 Ok(ac) => match data.do_action(ac.action) {
-                    Ok(Some(v)) => println!("{:?}", v),
+                    Ok(Some(v)) => println!("{}", v.print(0)),
                     Ok(None) => {}
                     Err(e) => println!("Error {}", e),
                 },

@@ -19,12 +19,11 @@ pub enum Value {
     FuncDef(Vec<String>, Vec<Action>),
 }
 
-pub enum SetResult{
+pub enum SetResult {
     Ok(Option<Value>),
-    Deref(Proto,Value),
+    Deref(Proto, Value),
     Err(ActionError),
 }
-
 
 impl Value {
     pub fn tree() -> Self {
@@ -35,6 +34,44 @@ impl Value {
     }
     pub fn str(s: &str) -> Self {
         Value::Str(s.to_string())
+    }
+
+    pub fn print(&self, depth: usize) -> String {
+        use Value::*;
+        let mut res = String::new();
+        match self {
+            Num(n) | Ex(Expr::Num(n)) => res.push_str(&n.to_string()),
+            Ex(e)=> res.push_str(&e.print()),
+            Tree(t) => {
+                for (k, v) in t {
+                    res.push('\n');
+                    for _ in 0..depth {
+                        res.push_str("  ");
+                    }
+                    res.push_str(k);
+                    res.push(':');
+                    res.push_str(&v.print(depth + 1));
+                }
+            }
+            FuncDef(params,_)=>{
+                res.push_str(&format!("func{:?}",params));
+            }
+            List(l)=>{
+                res.push('[');
+                for (i,v) in l.iter().enumerate(){
+                    if i != 0 {
+                        res.push(',');
+                    }
+                    res.push_str(&v.print(0));
+
+                }
+
+                res.push(']');
+
+            }
+            v => res.push_str(&format!("{:?}", v)),
+        }
+        res
     }
 
     pub fn eval_expr(self, dd: &mut DnData) -> Result<Self, ActionError> {
@@ -51,8 +88,8 @@ impl Value {
     }
 
     pub fn get_path<'a>(&'a self, pp: &mut ProtoP) -> Option<&'a Value> {
-        if let Value::Proto(_) = self{
-            return Some(self)
+        if let Value::Proto(_) = self {
+            return Some(self);
         };
         match pp.next() {
             None => Some(self),
@@ -84,23 +121,18 @@ impl Value {
         }
     }
 
-    pub fn set_at_path<'a>(
-        &'a mut self,
-        mut pp: ProtoP,
-        mut v: Value,
-    ) -> SetResult{
+    pub fn set_at_path<'a>(&'a mut self, mut pp: ProtoP, mut v: Value) -> SetResult {
         if pp.remaining() == 1 {
-            match self{
-                Value::Tree(t)=>{
+            match self {
+                Value::Tree(t) => {
                     let rv = t.insert(pp.next().unwrap().to_string(), v);
                     return SetResult::Ok(rv);
                 }
-                Value::Proto(p)=>{
-                    return SetResult::Deref(p.extend_new(pp).with_deref(1),v);
+                Value::Proto(p) => {
+                    return SetResult::Deref(p.extend_new(pp).with_deref(1), v);
                 }
-                _=>return SetResult::Err(ActionError::new("Cannot set child of a non tree")),
+                _ => return SetResult::Err(ActionError::new("Cannot set child of a non tree")),
             }
-            
         }
 
         match pp.next() {
@@ -118,8 +150,8 @@ impl Value {
                         return res;
                     }
                 },
-                Value::Proto(p)=>{
-                    return SetResult::Deref(p.extend_new(pp).with_deref(1),v);
+                Value::Proto(p) => {
+                    return SetResult::Deref(p.extend_new(pp).with_deref(1), v);
                 }
                 _ => return SetResult::Err(ActionError::new("canot set child of non tree")),
             },

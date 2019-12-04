@@ -108,6 +108,20 @@ impl Expr {
         }
     }
 
+    pub fn print(&self) -> String {
+        use Expr::*;
+        match self {
+            Num(n) => n.to_string(),
+            Proto(p) => format!("{:?}", p),
+            Add(a, b) => format!("({}+{})", a.print(), b.print()),
+            Sub(a, b) => format!("({}-{})", a.print(), b.print()),
+            Mul(a, b) => format!("({}*{})", a.print(), b.print()),
+            Div(a, b) => format!("({}/{})", a.print(), b.print()),
+            Neg(a) => format!("-{}", a.print()),
+            e => format!("{:?}", e),
+        }
+    }
+
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
