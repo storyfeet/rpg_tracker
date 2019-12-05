@@ -2,7 +2,7 @@ use crate::action::Action;
 use crate::error::ActionError;
 use crate::proto::{Proto, ProtoP};
 use crate::stack::StackItem;
-use crate::value::{Value,SetResult};
+use crate::value::{SetResult, Value};
 use std::collections::BTreeMap;
 
 #[derive(Debug)]
@@ -44,7 +44,7 @@ impl DnData {
         let mut p2 = p.clone();
         if let Some(v) = self.stack[lpos].vars.get_path(&mut p2) {
             if p2.remaining() > 0 {
-                if let Value::Proto(v2) = v{
+                if let Value::Proto(v2) = v {
                     let np = v2.extend_new(p2);
                     return self.get_pp(np.pp());
                 }
@@ -53,18 +53,17 @@ impl DnData {
         }
 
         let res = self.data.get_path(&mut p);
-        
-        match res{
-            Some(Value::Proto(p2))=>{
-                if p.remaining()>0{
+
+        match res {
+            Some(Value::Proto(p2)) => {
+                if p.remaining() > 0 {
                     let np = p2.extend_new(p);
                     self.get_pp(np.pp())
-                }else{
+                } else {
                     res
                 }
-                
             }
-            v=>v,
+            v => v,
         }
     }
 
@@ -75,16 +74,15 @@ impl DnData {
             .set_at_path(Proto::one(k, 0).pp(), v);
     }
 
-    fn on_sr(&mut self,sr:SetResult)->Result<Option<Value>,ActionError>{
-        match sr{
-            SetResult::Ok(v)=>return Ok(v),
-            SetResult::Deref(p,v)=>return self.set_pp(p.pp(),v),
-            SetResult::Err(e)=>return Err(e),
+    fn on_sr(&mut self, sr: SetResult) -> Result<Option<Value>, ActionError> {
+        match sr {
+            SetResult::Ok(v) => return Ok(v),
+            SetResult::Deref(p, v) => return self.set_pp(p.pp(), v),
+            SetResult::Err(e) => return Err(e),
         }
     }
 
     pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ActionError> {
-
         let lpos = self.stack.len() - 1;
         //proto named var
         let mut p2 = p.clone();
@@ -97,11 +95,11 @@ impl DnData {
         if let Some(vname) = p2.next() {
             if self.stack[lpos].vars.has_child(vname) {
                 let p3 = p.clone();
-                let sr =self.stack[lpos].vars.set_at_path(p3, v);
+                let sr = self.stack[lpos].vars.set_at_path(p3, v);
                 return self.on_sr(sr);
             }
         }
-        let sr =self.data.set_at_path(p, v) ;
+        let sr = self.data.set_at_path(p, v);
         self.on_sr(sr)
     }
 
@@ -142,7 +140,7 @@ impl DnData {
         res
     }
 
-    pub fn do_action(&mut self, a: Action) -> Result<Option<Value>, failure::Error> {
+    pub fn do_action(&mut self, a: Action) -> Result<Option<Value>, ActionError> {
         fn err(s: &str) -> ActionError {
             ActionError::new(s)
         };
@@ -193,7 +191,7 @@ impl DnData {
             Action::CallFunc(proto, params) => {
                 //TODO work out how to pass params
                 let np = self.in_context(&proto);
-                let nparent= np.parent();
+                let nparent = np.parent();
                 let (pnames, actions) = match self.get_pp(np.pp()) {
                     Some(Value::FuncDef(pn, ac)) => (pn.clone(), ac.clone()),
                     _ => return Err(err("func on notafunc").into()),
@@ -205,10 +203,9 @@ impl DnData {
                         self.set_param(&pnames[p], params[p].clone());
                     }
                 }
-                self.set_param("self",Value::Proto(nparent));
+                self.set_param("self", Value::Proto(nparent));
 
                 for a in actions {
-                    println!("func action {:?}", a);
                     match self.do_action(a) {
                         Ok(Some(v)) => {
                             self.restore();

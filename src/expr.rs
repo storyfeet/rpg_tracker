@@ -1,4 +1,5 @@
 use crate::dndata::DnData;
+use crate::action::Action;
 use crate::error::{ActionError, LineError};
 use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
@@ -6,12 +7,13 @@ use crate::token::{TokPrev, Token};
 use crate::value::Value;
 use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;
+use crate::prev_iter::Backer;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Num(i32),
     Proto(Proto),
-    Func(),
+    Func(Proto,Vec<Value>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
@@ -86,7 +88,7 @@ impl FromStr for Expr {
 }
 
 impl Expr {
-    pub fn eval(&self, root: &DnData) -> Result<Value, ActionError> {
+    pub fn eval(&self, root: &mut DnData) -> Result<Value, ActionError> {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
@@ -96,6 +98,7 @@ impl Expr {
             Mul(a, b) => a.eval(root)?.try_mul(b.eval(root)?)?,
             Div(a, b) => a.eval(root)?.try_div(b.eval(root)?)?,
             Neg(a) => a.eval(root)?.try_neg()?,
+            Func(nm,params) => root.do_action(Action::CallFunc(nm.clone(),params.to_vec()))?.ok_or(ActionError::new("func in expression returns no value"))?,
             _ => Value::num(0),
         })
     }
@@ -112,7 +115,7 @@ impl Expr {
         use Expr::*;
         match self {
             Num(n) => n.to_string(),
-            Proto(p) => format!("{:?}", p),
+            Proto(p) => format!("{}", p),
             Add(a, b) => format!("({}+{})", a.print(), b.print()),
             Sub(a, b) => format!("({}-{})", a.print(), b.print()),
             Mul(a, b) => format!("({}*{})", a.print(), b.print()),
@@ -126,7 +129,31 @@ impl Expr {
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
-                Token::Dollar => parts.push(Expr::Proto(Proto::from_tokens(it))),
+                Token::Dollar => {
+                    let pt = Proto::from_tokens(it);
+                    match it.next() {
+                        Some(Token::BOpen)=>{
+                            let mut params = Vec::new();
+                            while let Some(tk) = it.next(){
+                                match tk{
+                                    Token::BClose=>{
+                                        parts.push(Expr::Func(pt,params));
+                                        break;
+                                    }
+                                    Token::Comma=>{}
+                                    _=>{
+                                        it.back();
+                                        params.push(Value::from_tokens(it)?);
+                                    }
+                                }
+                            }
+                        }
+                        _ =>{
+                            it.back();
+                            parts.push(Expr::Proto(pt));
+                        }
+                    }
+                }
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
                 Token::Add | Token::Sub | Token::Mul | Token::Div => parts.push(Expr::Op(t)),

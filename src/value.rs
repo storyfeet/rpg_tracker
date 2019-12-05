@@ -17,6 +17,7 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
     FuncDef(Vec<String>, Vec<Action>),
+    ExprDef(Expr),
 }
 
 pub enum SetResult {
@@ -41,7 +42,7 @@ impl Value {
         let mut res = String::new();
         match self {
             Num(n) | Ex(Expr::Num(n)) => res.push_str(&n.to_string()),
-            Ex(e)=> res.push_str(&e.print()),
+            Ex(e) => res.push_str(&e.print()),
             Tree(t) => {
                 for (k, v) in t {
                     res.push('\n');
@@ -53,23 +54,25 @@ impl Value {
                     res.push_str(&v.print(depth + 1));
                 }
             }
-            FuncDef(params,_)=>{
-                res.push_str(&format!("func{:?}",params));
+            Proto(p) => {
+                res.push_str(&p.to_string());
             }
-            List(l)=>{
+            FuncDef(params, _) => {
+                res.push_str(&format!("func{:?}", params));
+            }
+            List(l) => {
                 res.push('[');
-                for (i,v) in l.iter().enumerate(){
+                for (i, v) in l.iter().enumerate() {
                     if i != 0 {
                         res.push(',');
                     }
                     res.push_str(&v.print(0));
-
                 }
 
                 res.push(']');
-
             }
-            v => res.push_str(&format!("{:?}", v)),
+            Str(s)=>res.push_str(&format!("\"{}\"",s)),
+           // v => res.push_str(&format!("{:?}", v)),
         }
         res
     }

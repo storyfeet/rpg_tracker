@@ -1,10 +1,31 @@
 use crate::prev_iter::{Backer, LineCounter, Prev};
 use crate::token::{Token, Tokenizer};
+use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
     pub dots: i32,
     pub derefs: i32,
     v: Vec<String>,
+}
+
+impl Display for Proto {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "$")?;
+
+        for _ in 0..self.derefs {
+            write!(f, "*")?;
+        }
+        for _ in 0..self.dots {
+            write!(f, ".")?;
+        }
+        for (i, s) in self.v.iter().enumerate() {
+            if i != 0 {
+                write!(f, ".")?;
+            }
+            write!(f, "{}", s)?;
+        }
+        Ok(())
+    }
 }
 
 impl Proto {
