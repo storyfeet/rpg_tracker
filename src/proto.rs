@@ -46,6 +46,13 @@ impl Proto {
         Self::from_tokens(&mut t)
     }
 
+    pub fn join_on_dot(&self, p: Self) -> Self {
+        if p.dots <= 0 {
+            return p;
+        }
+        self.extend_new(p.pp())
+    }
+
     pub fn parent(&self) -> Self {
         let mut res = self.clone();
         if res.v.len() > 0 {

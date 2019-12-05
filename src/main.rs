@@ -1,15 +1,18 @@
 mod action;
-mod dndata;
+//mod dndata;
 mod error;
 mod expr;
 mod parse;
 mod prev_iter;
 mod proto;
-mod stack;
+mod scope;
+//mod stack;
 mod token;
 mod value;
 
-use dndata::DnData;
+//use dndata::DnData;
+use scope::Scope;
+
 
 use clap_conf::prelude::*;
 
@@ -30,7 +33,7 @@ fn main() -> Result<(), failure::Error> {
 
     let r = parse::ActionReader::new(&fs);
 
-    let mut data = DnData::new();
+    let mut scope = Scope::new();
 
     for a in r {
         //        println!(" -- {:?}", a);
@@ -44,7 +47,7 @@ fn main() -> Result<(), failure::Error> {
                 continue;
             }
         };
-        if let Err(e) = data.do_action(a.action) {
+        if let Err(e) = scope.do_action(a.action) {
             println!("Error {} at {}", e, a.line)
         }
     }
@@ -58,7 +61,7 @@ fn main() -> Result<(), failure::Error> {
 
         for a in parse::ActionReader::new(&input) {
             match a {
-                Ok(ac) => match data.do_action(ac.action) {
+                Ok(ac) => match scope.do_action(ac.action) {
                     Ok(Some(v)) => println!("{}", v.print(0)),
                     Ok(None) => {}
                     Err(e) => println!("Error {}", e),
@@ -68,7 +71,7 @@ fn main() -> Result<(), failure::Error> {
         }
     }
 
-    println!("{:?}", data);
+    println!("{:?}", scope);
 
     Ok(())
 }

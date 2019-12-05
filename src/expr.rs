@@ -1,19 +1,19 @@
-use crate::dndata::DnData;
 use crate::action::Action;
 use crate::error::{ActionError, LineError};
+use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
+use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
 use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;
-use crate::prev_iter::Backer;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Num(i32),
     Proto(Proto),
-    Func(Proto,Vec<Value>),
+    Func(Proto, Vec<Value>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
@@ -88,17 +88,20 @@ impl FromStr for Expr {
 }
 
 impl Expr {
-    pub fn eval(&self, root: &mut DnData) -> Result<Value, ActionError> {
+    pub fn eval<'a>(&self, scope: &'a Scope<'a>) -> Result<Value, ActionError> {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
-            Proto(p) => root.resolve(Value::Proto(p.with_deref(1)))?,
-            Add(a, b) => a.eval(root)?.try_add(b.eval(root)?)?,
-            Sub(a, b) => a.eval(root)?.try_sub(b.eval(root)?)?,
-            Mul(a, b) => a.eval(root)?.try_mul(b.eval(root)?)?,
-            Div(a, b) => a.eval(root)?.try_div(b.eval(root)?)?,
-            Neg(a) => a.eval(root)?.try_neg()?,
-            Func(nm,params) => root.do_action(Action::CallFunc(nm.clone(),params.to_vec()))?.ok_or(ActionError::new("func in expression returns no value"))?,
+            Proto(p) => scope.resolve(Value::Proto(p.with_deref(1)))?,
+            Add(a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
+            Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
+            Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
+            Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
+            Neg(a) => a.eval(scope)?.try_neg()?,
+            Func(nm, params)=>Value::num(0),
+            /*    => scope
+                .do_action(Action::CallFunc(nm.clone(), params.to_vec()))?
+                .ok_or(ActionError::new("func in expression returns no value"))?,*/
             _ => Value::num(0),
         })
     }
@@ -132,23 +135,23 @@ impl Expr {
                 Token::Dollar => {
                     let pt = Proto::from_tokens(it);
                     match it.next() {
-                        Some(Token::BOpen)=>{
+                        Some(Token::BOpen) => {
                             let mut params = Vec::new();
-                            while let Some(tk) = it.next(){
-                                match tk{
-                                    Token::BClose=>{
-                                        parts.push(Expr::Func(pt,params));
+                            while let Some(tk) = it.next() {
+                                match tk {
+                                    Token::BClose => {
+                                        parts.push(Expr::Func(pt, params));
                                         break;
                                     }
-                                    Token::Comma=>{}
-                                    _=>{
+                                    Token::Comma => {}
+                                    _ => {
                                         it.back();
                                         params.push(Value::from_tokens(it)?);
                                     }
                                 }
                             }
                         }
-                        _ =>{
+                        _ => {
                             it.back();
                             parts.push(Expr::Proto(pt));
                         }

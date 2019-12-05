@@ -1,10 +1,10 @@
 use crate::action::Action;
-use crate::dndata::DnData;
 use crate::error::{ActionError, LineError};
 use crate::expr::Expr;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
+use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
 
@@ -17,7 +17,6 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
     FuncDef(Vec<String>, Vec<Action>),
-    ExprDef(Expr),
 }
 
 pub enum SetResult {
@@ -71,15 +70,15 @@ impl Value {
 
                 res.push(']');
             }
-            Str(s)=>res.push_str(&format!("\"{}\"",s)),
-           // v => res.push_str(&format!("{:?}", v)),
+            Str(s) => res.push_str(&format!("\"{}\"", s)),
+            // v => res.push_str(&format!("{:?}", v)),
         }
         res
     }
 
-    pub fn eval_expr(self, dd: &mut DnData) -> Result<Self, ActionError> {
+    pub fn eval_expr(self, scope: &Scope) -> Result<Self, ActionError> {
         match self {
-            Value::Ex(e) => e.eval(dd),
+            Value::Ex(e) => e.eval(scope),
             _ => Ok(self),
         }
     }
