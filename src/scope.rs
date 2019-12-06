@@ -4,27 +4,18 @@ use crate::proto::{Proto, ProtoP};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 
-pub trait Scoper:Debug+Sized{
-    fn rescope<'a>(&'a mut self, this: Proto) -> Scope<'a> {
-        let mut t = Value::tree();
-        t.set_at_path(Proto::one("this", 0).pp(), Value::Proto(this));
-        Scope {
-            data: t,
-            base: None,
-            parent: Some(self),
-        }
-    }
-}
+//unsafe invariant that must be maintained:
+//rescoped Scopes can only be used for immediate function calls
 
 #[derive(Debug)]
-pub struct Scope<'a>{
+pub struct Scope {
     data: Value,
     base: Option<Proto>,
-    parent: Option<&'a dyn Scoper>,
+    parent: Option<*mut Scope>,
 }
 
-impl<'a> Scope<'a> {
-    pub fn new() -> Scope<'static> {
+impl Scope {
+    pub fn new() -> Scope {
         let t = Value::tree();
         Scope {
             data: t,
@@ -32,8 +23,6 @@ impl<'a> Scope<'a> {
             parent: None,
         }
     }
-
-
 
     pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
         //var with name exists
@@ -47,10 +36,49 @@ impl<'a> Scope<'a> {
             }
             return Some(v);
         }
-        if let Some(ref par) = self.parent {
-            return par.get_pp(p);
+        unsafe {
+            if let Some(par) = self.parent {
+                return (&*par).get_pp(p);
+            }
         }
         None
+    }
+
+    pub fn call_func(
+        &mut self,
+        proto: Proto,
+        params: Vec<Value>,
+    ) -> Result<Option<Value>, ActionError> {
+        let mut wrap = Scope {
+            base: None,
+            data: Value::tree(),
+            parent: Some(self as *mut Scope),
+        };
+        let np = self.in_context(&proto)?;
+        let nparent = np.parent();
+        let (pnames, actions) = match self.get_pp(np.pp()) {
+            Some(Value::FuncDef(pn, ac)) => (pn.clone(), ac.clone()),
+            _ => return Err(ActionError::new("func on notafunc")),
+        };
+
+        for p in 0..params.len() {
+            if pnames.len() > p {
+                wrap.set_param(&pnames[p], params[p].clone());
+            }
+        }
+        wrap.set_param("self", Value::Proto(nparent));
+
+        for a in actions {
+            let done = wrap.do_action(a);
+            match done {
+                Ok(Some(v)) => {
+                    return Ok(Some(v));
+                }
+                Err(e) => return Err(e),
+                Ok(None) => {}
+            }
+        }
+        Ok(None)
     }
 
     fn on_sr(&mut self, sr: SetResult) -> Result<Option<Value>, ActionError> {
@@ -63,6 +91,7 @@ impl<'a> Scope<'a> {
     pub fn set_param(&mut self, k: &str, v: Value) {
         self.data.set_at_path(Proto::one(k, 0).pp(), v);
     }
+
     pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ActionError> {
         //proto named var
         let mut p2 = p.clone();
@@ -80,8 +109,10 @@ impl<'a> Scope<'a> {
             }
         }
         //try parent
-        if let Some(par) = &mut self.parent {
-            return par.set_pp(p, v);
+        unsafe {
+            if let Some(par) = self.parent {
+                return (&mut *par).set_pp(p, v);
+            }
         }
 
         let sr = self.data.set_at_path(p, v);
@@ -91,9 +122,14 @@ impl<'a> Scope<'a> {
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
         let mut res = match p.dots {
             0 => p.clone(),
-            _ => match & self.parent {
-                Some(par) => return par.in_context(p),
-                None => return Err(ActionError::new("Cannot find context for '.'")),
+            _ => match self.base.as_ref() {
+                Some(b) => b.extend_new(p.pp()),
+                None => match self.parent {
+                    Some(par) => unsafe {
+                        return (&*par).in_context(p);
+                    },
+                    None => return Err(ActionError::new("Cannot find context for '.'")),
+                },
             },
         };
         let dcount = res.derefs;
@@ -105,7 +141,7 @@ impl<'a> Scope<'a> {
         }
         Ok(res)
     }
-    pub fn resolve(&'a self, v: Value) -> Result<Value, ActionError> {
+    pub fn resolve(&self, v: Value) -> Result<Value, ActionError> {
         match v {
             Value::Ex(e) => e.eval(self),
             Value::Proto(mut p) => {
@@ -144,6 +180,7 @@ impl<'a> Scope<'a> {
                     }
                 }
                 self.base = Some(np.clone());
+                println!("set base {:?}", np);
             }
             Action::Set(proto, v) => {
                 let np = self.in_context(&proto)?;
@@ -179,30 +216,7 @@ impl<'a> Scope<'a> {
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
                 //TODO work out how to pass params
-                let np = self.in_context(&proto)?;
-                let nparent = np.parent();
-                let (pnames, actions) = match self.get_pp(np.pp()) {
-                    Some(Value::FuncDef(pn, ac)) => (pn.clone(), ac.clone()),
-                    _ => return Err(err("func on notafunc").into()),
-                };
-
-                let mut wrap = self.rescope(nparent);
-                for p in 0..params.len() {
-                    if pnames.len() > p {
-                        wrap.set_param(&pnames[p], params[p].clone());
-                    }
-                }
-
-                for a in actions {
-                    let done = wrap.do_action(a);
-                    match done{
-                        Ok(Some(v)) => {
-                            return Ok(Some(v));
-                        }
-                        Err(e) => return Err(e),
-                        Ok(None) => {}
-                    }
-                }
+                return self.call_func(proto, params);
             }
         };
         Ok(None)

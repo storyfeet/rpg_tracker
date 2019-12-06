@@ -1,4 +1,3 @@
-use crate::action::Action;
 use crate::error::{ActionError, LineError};
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
@@ -88,7 +87,7 @@ impl FromStr for Expr {
 }
 
 impl Expr {
-    pub fn eval<'a>(&self, scope: &'a Scope<'a>) -> Result<Value, ActionError> {
+    pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
@@ -98,10 +97,10 @@ impl Expr {
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            Func(nm, params)=>Value::num(0),
+            Func(_nm, _params) => Value::num(0),
             /*    => scope
-                .do_action(Action::CallFunc(nm.clone(), params.to_vec()))?
-                .ok_or(ActionError::new("func in expression returns no value"))?,*/
+            .do_action(Action::CallFunc(nm.clone(), params.to_vec()))?
+            .ok_or(ActionError::new("func in expression returns no value"))?,*/
             _ => Value::num(0),
         })
     }
