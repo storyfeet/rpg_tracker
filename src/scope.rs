@@ -2,25 +2,10 @@ use crate::action::Action;
 use crate::error::ActionError;
 use crate::proto::{Proto, ProtoP};
 use crate::value::{SetResult, Value};
+use std::fmt::Debug;
 
-#[derive(Debug)]
-pub struct Scope<'a> {
-    data: Value,
-    base: Option<Proto>,
-    parent: Option<&'a Scope<'a>>,
-}
-
-impl<'a> Scope<'a> {
-    pub fn new() -> Scope<'static> {
-        let mut t = Value::tree();
-        Scope {
-            data: t,
-            base: None,
-            parent: None,
-        }
-    }
-
-    pub fn rescope(&'a mut self, this: Proto) -> Scope<'a> {
+pub trait Scoper:Debug+Sized{
+    fn rescope<'a>(&'a mut self, this: Proto) -> Scope<'a> {
         let mut t = Value::tree();
         t.set_at_path(Proto::one("this", 0).pp(), Value::Proto(this));
         Scope {
@@ -29,8 +14,28 @@ impl<'a> Scope<'a> {
             parent: Some(self),
         }
     }
+}
 
-    pub fn get_pp(&self, mut p: ProtoP) -> Option<&Value> {
+#[derive(Debug)]
+pub struct Scope<'a>{
+    data: Value,
+    base: Option<Proto>,
+    parent: Option<&'a dyn Scoper>,
+}
+
+impl<'a> Scope<'a> {
+    pub fn new() -> Scope<'static> {
+        let t = Value::tree();
+        Scope {
+            data: t,
+            base: None,
+            parent: None,
+        }
+    }
+
+
+
+    pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
         //var with name exists
         let mut p2 = p.clone();
         if let Some(v) = self.data.get_path(&mut p2) {
@@ -42,7 +47,7 @@ impl<'a> Scope<'a> {
             }
             return Some(v);
         }
-        if let Some(par) = self.parent {
+        if let Some(ref par) = self.parent {
             return par.get_pp(p);
         }
         None
@@ -75,7 +80,7 @@ impl<'a> Scope<'a> {
             }
         }
         //try parent
-        if let Some(par) = self.parent {
+        if let Some(par) = &mut self.parent {
             return par.set_pp(p, v);
         }
 
@@ -86,7 +91,7 @@ impl<'a> Scope<'a> {
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
         let mut res = match p.dots {
             0 => p.clone(),
-            _ => match self.parent {
+            _ => match & self.parent {
                 Some(par) => return par.in_context(p),
                 None => return Err(ActionError::new("Cannot find context for '.'")),
             },
@@ -100,7 +105,7 @@ impl<'a> Scope<'a> {
         }
         Ok(res)
     }
-    pub fn resolve(&self, v: Value) -> Result<Value, ActionError> {
+    pub fn resolve(&'a self, v: Value) -> Result<Value, ActionError> {
         match v {
             Value::Ex(e) => e.eval(self),
             Value::Proto(mut p) => {
@@ -124,7 +129,7 @@ impl<'a> Scope<'a> {
         }
     }
 
-    pub fn do_action(&'a mut self, a: Action) -> Result<Option<Value>, ActionError> {
+    pub fn do_action(&mut self, a: Action) -> Result<Option<Value>, ActionError> {
         fn err(s: &str) -> ActionError {
             ActionError::new(s)
         };
@@ -189,7 +194,8 @@ impl<'a> Scope<'a> {
                 }
 
                 for a in actions {
-                    match wrap.do_action(a) {
+                    let done = wrap.do_action(a);
+                    match done{
                         Ok(Some(v)) => {
                             return Ok(Some(v));
                         }

@@ -13,7 +13,6 @@ mod value;
 //use dndata::DnData;
 use scope::Scope;
 
-
 use clap_conf::prelude::*;
 
 fn main() -> Result<(), failure::Error> {

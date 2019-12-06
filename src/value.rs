@@ -76,7 +76,7 @@ impl Value {
         res
     }
 
-    pub fn eval_expr(self, scope: &Scope) -> Result<Self, ActionError> {
+    pub fn eval_expr<'a>(self, scope: &'a Scope<'a>) -> Result<Self, ActionError> {
         match self {
             Value::Ex(e) => e.eval(scope),
             _ => Ok(self),
