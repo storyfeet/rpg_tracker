@@ -15,7 +15,7 @@ pub struct Scope {
 }
 
 #[derive(Debug)]
-enum Parent{
+enum Parent {
     Mut(*mut Scope),
     Const(*const Scope),
     None,
@@ -30,7 +30,6 @@ impl Scope {
         }
     }
 
-
     pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
         //var with name exists
         let mut p2 = p.clone();
@@ -43,39 +42,44 @@ impl Scope {
             }
             return Some(v);
         }
-        
+
         unsafe {
-            match self.parent{
+            match self.parent {
                 Parent::Mut(par) => return (&*par).get_pp(p),
-                Parent::Const(par)=> return (&*par).get_pp(p),
-                Parent::None =>{},
+                Parent::Const(par) => return (&*par).get_pp(p),
+                Parent::None => {}
             }
         }
         None
     }
-    pub fn call_func_const(&self,proto:Proto,params:Vec<Value>)->Result<Option<Value>,ActionError>{
-        let mut wrap = Scope{
-                base:None,
-                data:Value::tree(),
-                parent:Parent::Const(self as *const Scope)
-            };
-        wrap.run_func(proto,params)
+    pub fn call_func_const(
+        &self,
+        proto: Proto,
+        params: Vec<Value>,
+    ) -> Result<Option<Value>, ActionError> {
+        let mut wrap = Scope {
+            base: None,
+            data: Value::tree(),
+            parent: Parent::Const(self as *const Scope),
+        };
+        wrap.run_func(proto, params)
     }
 
-    pub fn call_func_mut(&mut self,proto: Proto,params:Vec<Value>) -> Result<Option<Value>, ActionError> {
-        let mut wrap = Scope{
-                base:None,
-                data:Value::tree(),
-                parent:Parent::Mut(self as *mut Scope)
-            };
-        wrap.run_func(proto,params)
-    }
-
-    fn run_func(
+    pub fn call_func_mut(
         &mut self,
         proto: Proto,
         params: Vec<Value>,
     ) -> Result<Option<Value>, ActionError> {
+        let mut wrap = Scope {
+            base: None,
+            data: Value::tree(),
+            parent: Parent::Mut(self as *mut Scope),
+        };
+        wrap.run_func(proto, params)
+    }
+
+    fn run_func(&mut self, proto: Proto, params: Vec<Value>) -> Result<Option<Value>, ActionError> {
+        println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
         let (pnames, actions) = match self.get_pp(np.pp()) {
@@ -146,11 +150,13 @@ impl Scope {
             0 => p.clone(),
             _ => match self.base.as_ref() {
                 Some(b) => b.extend_new(p.pp()),
-                None => unsafe{ 
+                None => unsafe {
                     match self.parent {
-                        Parent::Const(par)=>return (&*par).in_context(p),
-                        Parent::Mut(par)=>return (&*par).in_context(p),
-                        Parent::None => return Err(ActionError::new("Cannot find context for '.'")),
+                        Parent::Const(par) => return (&*par).in_context(p),
+                        Parent::Mut(par) => return (&*par).in_context(p),
+                        Parent::None => {
+                            return Err(ActionError::new("Cannot find context for '.'"))
+                        }
                     }
                 },
             },
@@ -165,6 +171,11 @@ impl Scope {
         Ok(res)
     }
     pub fn resolve(&self, v: Value) -> Result<Value, ActionError> {
+        println!(
+            "resolve {:?}\n{:?}",
+            self.get_pp(Proto::one("self", 0).pp()),
+            v.print(0)
+        );
         match v {
             Value::Ex(e) => e.eval(self),
             Value::Proto(mut p) => {

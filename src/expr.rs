@@ -88,6 +88,7 @@ impl FromStr for Expr {
 
 impl Expr {
     pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
+        println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
