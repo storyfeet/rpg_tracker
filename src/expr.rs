@@ -5,13 +5,11 @@ use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
-use std::ops::{Add, Div, Mul, Sub};
 use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
-    Num(i32),
-    Proto(Proto),
+    Val(Value),
     Func(Proto, Vec<Value>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
@@ -25,62 +23,6 @@ pub enum Expr {
     Op(Token),
 }
 
-impl Add for Expr {
-    type Output = Expr;
-    fn add(self, rhs: Expr) -> Self::Output {
-        use Expr::*;
-        match self {
-            Num(a) => match rhs {
-                Num(b) => Num(a + b),
-                e => Add(Box::new(Num(a)), Box::new(e)),
-            },
-            a => Add(Box::new(a), Box::new(rhs)),
-        }
-    }
-}
-
-impl Sub for Expr {
-    type Output = Expr;
-    fn sub(self, rhs: Expr) -> Self::Output {
-        use Expr::*;
-        match self {
-            Num(a) => match rhs {
-                Num(b) => Num(a - b),
-                e => Sub(Box::new(Num(a)), Box::new(e)),
-            },
-            a => Sub(Box::new(a), Box::new(rhs)),
-        }
-    }
-}
-impl Mul for Expr {
-    type Output = Expr;
-    fn mul(self, rhs: Expr) -> Self::Output {
-        use Expr::*;
-        match self {
-            Num(a) => match rhs {
-                Num(b) => Num(a * b),
-                e => Mul(Box::new(Num(a)), Box::new(e)),
-            },
-            a => Mul(Box::new(a), Box::new(rhs)),
-        }
-    }
-}
-
-impl Div for Expr {
-    type Output = Expr;
-    fn div(self, rhs: Expr) -> Self::Output {
-        use Expr::*;
-        match self {
-            Num(a) => match rhs {
-                Num(0) => Num(0),
-                Num(b) => Num(a / b),
-                e => Mul(Box::new(Num(a)), Box::new(e)),
-            },
-            a => Mul(Box::new(a), Box::new(rhs)),
-        }
-    }
-}
-
 impl FromStr for Expr {
     type Err = LineError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -91,38 +33,35 @@ impl FromStr for Expr {
 }
 
 impl Expr {
+    pub fn num(n: i32) -> Self {
+        Expr::Val(Value::Num(n))
+    }
+    pub fn neg(e:Expr)->Self{
+        Expr::Neg(Box::new(e))
+    }
+
     pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
-            Num(n) => Value::num(*n),
-            Proto(p) => scope.resolve(&Value::Proto(p.with_deref(1)))?,
+            Val(n) => scope.resolve(n)?,
             Add(a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
             Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            LThan(a, b) => Value::num((a.eval(scope)? < b.eval(scope)?) as i32),
+            //LThan(a, b) => Value::num((a.eval(scope)? < b.eval(scope)?) as i32),
             Func(nm, params) => scope
                 .call_func_const(nm.clone(), params)?
                 .ok_or(ActionError::new("func in expression returns no value"))?,
-            _ => Value::num(0),
+            _ => Value::Num(0),
         })
-    }
-
-    pub fn neg(self) -> Self {
-        match self {
-            Expr::Num(n) => Expr::Num(-n),
-            Expr::Neg(ex) => *ex,
-            ex => Expr::Neg(Box::new(ex)),
-        }
     }
 
     pub fn print(&self) -> String {
         use Expr::*;
         match self {
-            Num(n) => n.to_string(),
-            Proto(p) => format!("{}", p),
+            Val(v) => v.print(0),
             Add(a, b) => format!("({}+{})", a.print(), b.print()),
             Sub(a, b) => format!("({}-{})", a.print(), b.print()),
             Mul(a, b) => format!("({}*{})", a.print(), b.print()),
@@ -133,32 +72,19 @@ impl Expr {
     }
 
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
+        match it.next().ok_or(it.eof())? {
+            Token::BOpen=>{},
+            Token::Sub=>return Ok(Expr::neg(Expr::from_tokens(it)?)),
+            _ => {
+                it.back();
+                return Ok(Expr::Val(Value::from_tokens(it)?));
+            }
+        }
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
                 Token::Dollar => {
                     let pt = Proto::from_tokens(it);
-                    match it.next() {
-                        Some(Token::BOpen) => {
-                            let mut params = Vec::new();
-                            while let Some(tk) = it.next() {
-                                match tk {
-                                    Token::BClose => {
-                                        parts.push(Expr::Func(pt, params));
-                                        break;
-                                    }
-                                    Token::Comma => {}
-                                    _ => {
-                                        it.back();
-                                        params.push(Value::from_tokens(it)?);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {
-                            it.back();
-                            parts.push(Expr::Proto(pt));
-                        }
                     }
                 }
                 Token::Break | Token::BClose => break,
@@ -171,7 +97,7 @@ impl Expr {
                 | Token::LThan
                 | Token::Amp
                 | Token::Or => parts.push(Expr::Op(t)),
-                Token::Num(n) => parts.push(Expr::Num(n)),
+                Token::Num(n) => parts.push(Expr::Val(Value::Num(n))),
                 _ => return Err(it.err("Unexptected token in expression")),
             }
         }

@@ -4,7 +4,6 @@ use crate::expr::Expr;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
-use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
 
@@ -12,11 +11,11 @@ use std::collections::BTreeMap;
 pub enum Value {
     Bool(bool),
     Num(i32),
-    Ex(Expr),
     Str(String),
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
+    CallFunc(Proto,Vec<Value>),
     FuncDef(Vec<String>, Vec<Action>),
 }
 
@@ -30,9 +29,7 @@ impl Value {
     pub fn tree() -> Self {
         Value::Tree(BTreeMap::new())
     }
-    pub fn num(n: i32) -> Self {
-        Value::Ex(Expr::Num(n))
-    }
+
     pub fn str(s: &str) -> Self {
         Value::Str(s.to_string())
     }
@@ -41,8 +38,7 @@ impl Value {
         use Value::*;
         let mut res = String::new();
         match self {
-            Num(n) | Ex(Expr::Num(n)) => res.push_str(&n.to_string()),
-            Ex(e) => res.push_str(&e.print()),
+            Num(n) => res.push_str(&n.to_string()),
             Tree(t) => {
                 for (k, v) in t {
                     res.push('\n');
@@ -77,12 +73,6 @@ impl Value {
         res
     }
 
-    pub fn eval_expr<'a>(self, scope: &Scope) -> Result<Self, ActionError> {
-        match self {
-            Value::Ex(e) => e.eval(scope),
-            _ => Ok(self),
-        }
-    }
     pub fn has_child(&self, s: &str) -> bool {
         match self {
             Value::Tree(t) => t.get(s).is_some(),
@@ -165,9 +155,9 @@ impl Value {
     pub fn try_add(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
-            Ex(a) => match rhs {
-                Ex(b) => Ok(Ex(a + b)),
-                _ => Err(ActionError::new("Cannot add non Expression to Expression")),
+            Num(a) => match rhs {
+                Num(b) => Ok(Num(a + b)),
+                _ => Err(ActionError::new("Cannot add non num to num")),
             },
             Str(mut a) => match rhs {
                 Str(b) => {
@@ -193,9 +183,9 @@ impl Value {
     pub fn try_sub(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
-            Ex(a) => match rhs {
-                Ex(b) => Ok(Ex(a - b)),
-                _ => Err(ActionError::new("Can only sub Ex from Ex")),
+            Num(a) => match rhs {
+                Num(b) => Ok(Num(a - b)),
+                _ => Err(ActionError::new("Can only sub num from num")),
             },
             Str(_) => Err(ActionError::new("Cannot subtract from string")),
             List(a) => match rhs {
@@ -215,17 +205,18 @@ impl Value {
 
     pub fn try_mul(self, rhs: Value) -> Result<Value, ActionError> {
         match self {
-            Value::Ex(a) => match rhs {
-                Value::Ex(b) => Ok(Value::Ex(a * b)),
-                _ => Err(ActionError::new("No mul on non ex")),
+            Value::Num(a) => match rhs {
+                Value::Num(b) => Ok(Value::Num(a * b)),
+                _ => Err(ActionError::new("No mul on non num")),
             },
-            _ => Err(ActionError::new("No mul on non ex")),
+            _ => Err(ActionError::new("No mul on non num")),
         }
     }
     pub fn try_div(self, rhs: Value) -> Result<Value, ActionError> {
         match self {
-            Value::Ex(a) => match rhs {
-                Value::Ex(b) => Ok(Value::Ex(a / b)),
+            Value::Num(a) => match rhs {
+                Value::Num(0) => Err(ActionError::new("Can't div by zero")),
+                Value::Num(b) => Ok(Value::Num(a / b)),
                 _ => Err(ActionError::new("No mul on non ex")),
             },
             _ => Err(ActionError::new("No mul on non ex")),
@@ -233,7 +224,8 @@ impl Value {
     }
     pub fn try_neg(self) -> Result<Value, ActionError> {
         match self {
-            Value::Ex(Expr::Num(v)) => Ok(Value::num(-v)),
+            Value::Num(v) => Ok(Value::Num(-v)),
+            Value::Bool(b) => Ok(Value::Bool(!b)),
             _ => Err(ActionError::new("No neg non ex")),
         }
     }
@@ -242,12 +234,6 @@ impl Value {
 impl From<String> for Value {
     fn from(s: String) -> Self {
         Value::Str(s)
-    }
-}
-
-impl From<Expr> for Value {
-    fn from(e: Expr) -> Self {
-        Value::Ex(e)
     }
 }
 
@@ -288,21 +274,46 @@ impl Value {
         Ok(Value::FuncDef(params, actions))
     }
 
-    pub fn from_tokens(t: &mut TokPrev) -> Result<Self, LineError> {
-        match t.next() {
-            None => Err(t.err("UX-EOF")),
+
+
+    pub fn from_tokens(it: &mut TokPrev) -> Result<Self, LineError> {
+        match it.next() {
+            None => Err(it.err("UX-EOF")),
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Ident(s)) => match s.as_ref() {
-                "func" => Self::func_def(t),
+                "func" => return Self::func_def(it),
                 "expr" => {
                     let ev = vec![Action::Expr(Expr::from_tokens(t)?)];
                     Ok(Value::FuncDef(Vec::new(), ev))
                 }
                 sv => Ok(Value::str(sv)),
             },
-            Some(Token::Num(n)) => Ok(Value::Ex(Expr::Num(n))),
-            Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(t))),
-            Some(Token::BOpen) => Expr::from_tokens(t).map(|v| Value::Ex(v)),
+            Some(Token::Num(n)) => Ok(Value::Num(n)),
+            Some(Token::Dollar) => {
+                let pt = Value::Proto(Proto::from_tokens(t));
+                match it.next() {
+                    Some(Token::BOpen) => {
+                        let mut params = Vec::new();
+                        while let Some(tk) = it.next() {
+                            match tk {
+                                Token::BClose => {
+                                    parts.push(Expr::Func(pt, params));
+                                    break;
+                                }
+                                Token::Comma => {}
+                                _ => {
+                                    it.back();
+                                    params.push(Value::from_tokens(it)?);
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        it.back();
+                        parts.push(Expr::Proto(pt));
+                    }
+            }
+                
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = t.next() {

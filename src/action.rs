@@ -9,9 +9,9 @@ use crate::value::Value;
 pub enum Action {
     Show(Proto),
     Select(Option<Proto>),
-    Add(Proto, Value),
-    Sub(Proto, Value),
-    Set(Proto, Value),
+    Add(Proto, Expr),
+    Sub(Proto, Expr),
+    Set(Proto, Expr),
     CallFunc(Proto, Vec<Value>),
     Expr(Expr),
 }
@@ -32,8 +32,8 @@ impl Action {
             .map_err(|p| p.set_line(t.line()))?
             .to_string();
         match sign {
-            Token::Add => Ok(Action::Add(Proto::one(&id, 1), Value::num(n))),
-            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1), Value::num(n))),
+            Token::Add => Ok(Action::Add(Proto::one(&id, 1),Expr::num(n))),
+            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1),Expr::num(n))),
             _ => Err(t.err("Not Addable")),
         }
     }
@@ -42,9 +42,9 @@ impl Action {
         match t.next() {
             None | Some(Token::Break) => Ok(Action::Show(p)),
             Some(Token::Colon) => Ok(Action::Select(Some(p))),
-            Some(Token::Equals) => Ok(Action::Set(p, Value::from_tokens(t)?)),
-            Some(Token::Add) => Ok(Action::Add(p, Value::from_tokens(t)?)),
-            Some(Token::Sub) => Ok(Action::Sub(p, Value::from_tokens(t)?)),
+            Some(Token::Equals) => Ok(Action::Set(p, Expr::from_tokens(t)?)),
+            Some(Token::Add) => Ok(Action::Add(p, Expr::from_tokens(t)?)),
+            Some(Token::Sub) => Ok(Action::Sub(p, Expr::from_tokens(t)?)),
             Some(Token::BOpen) => {
                 let mut params = Vec::new();
                 while let Some(tk) = t.next() {
