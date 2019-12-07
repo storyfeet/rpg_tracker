@@ -97,10 +97,9 @@ impl Expr {
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            Func(_nm, _params) => Value::num(0),
-            /*    => scope
-            .do_action(Action::CallFunc(nm.clone(), params.to_vec()))?
-            .ok_or(ActionError::new("func in expression returns no value"))?,*/
+            Func(nm, params) => scope
+                .call_func_const(nm.clone(), params.to_vec())?
+                .ok_or(ActionError::new("func in expression returns no value"))?,
             _ => Value::num(0),
         })
     }

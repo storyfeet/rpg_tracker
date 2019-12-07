@@ -1,36 +1,45 @@
 
-Weapon
+Weapon:
     .Dam=3
     .view=[Dam,Acc,Range]
 
-Dagger
+Dagger:
     .proto = $Weapon
     .Acc=d6 
 
 #This is a comment
 
-Player
+Player:
+    .print=func()[
+        v.HP = ($self.HP)
+        v.Health = $self.Health()
+        v
+    ]
     .HP=10
     .Dam=0
     .Health=expr($self.HP - $self.Dam)
     .battle_view = [HP,Dam,Health]
 
-Bill
-    .proto=$Player
-        #another comment
-    .HP=10
+Bill = $*Player
+Bill:
+    .HP+5
     .weapons=[3,($d6+2),4,harold]
     .Str=5
     .Acc=expr($d3)
     .Speed=23
-    .HP+5
     .run=func(red)[
         red.GP+4
         ($red.GP)
     ]
-    .items
+    .items:
     +10 GP
     +Tent
     +2Flower
     +3 Pig
     -Pig
+
+River = $*Player
+River:
+    .HP -3
+    .items.Flowers = 3
+

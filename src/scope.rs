@@ -11,18 +11,25 @@ use std::fmt::Debug;
 pub struct Scope {
     data: Value,
     base: Option<Proto>,
-    parent: Option<*mut Scope>,
+    parent: Parent,
+}
+
+#[derive(Debug)]
+enum Parent{
+    Mut(*mut Scope),
+    Const(*const Scope),
+    None,
 }
 
 impl Scope {
     pub fn new() -> Scope {
-        let t = Value::tree();
         Scope {
-            data: t,
+            data: Value::tree(),
             base: None,
-            parent: None,
+            parent: Parent::None,
         }
     }
+
 
     pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
         //var with name exists
@@ -36,24 +43,39 @@ impl Scope {
             }
             return Some(v);
         }
+        
         unsafe {
-            if let Some(par) = self.parent {
-                return (&*par).get_pp(p);
+            match self.parent{
+                Parent::Mut(par) => return (&*par).get_pp(p),
+                Parent::Const(par)=> return (&*par).get_pp(p),
+                Parent::None =>{},
             }
         }
         None
     }
+    pub fn call_func_const(&self,proto:Proto,params:Vec<Value>)->Result<Option<Value>,ActionError>{
+        let mut wrap = Scope{
+                base:None,
+                data:Value::tree(),
+                parent:Parent::Const(self as *const Scope)
+            };
+        wrap.run_func(proto,params)
+    }
 
-    pub fn call_func(
+    pub fn call_func_mut(&mut self,proto: Proto,params:Vec<Value>) -> Result<Option<Value>, ActionError> {
+        let mut wrap = Scope{
+                base:None,
+                data:Value::tree(),
+                parent:Parent::Mut(self as *mut Scope)
+            };
+        wrap.run_func(proto,params)
+    }
+
+    fn run_func(
         &mut self,
         proto: Proto,
         params: Vec<Value>,
     ) -> Result<Option<Value>, ActionError> {
-        let mut wrap = Scope {
-            base: None,
-            data: Value::tree(),
-            parent: Some(self as *mut Scope),
-        };
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
         let (pnames, actions) = match self.get_pp(np.pp()) {
@@ -63,13 +85,13 @@ impl Scope {
 
         for p in 0..params.len() {
             if pnames.len() > p {
-                wrap.set_param(&pnames[p], params[p].clone());
+                self.set_param(&pnames[p], params[p].clone());
             }
         }
-        wrap.set_param("self", Value::Proto(nparent));
+        self.set_param("self", Value::Proto(nparent));
 
         for a in actions {
-            let done = wrap.do_action(a);
+            let done = self.do_action(a);
             match done {
                 Ok(Some(v)) => {
                     return Ok(Some(v));
@@ -110,7 +132,7 @@ impl Scope {
         }
         //try parent
         unsafe {
-            if let Some(par) = self.parent {
+            if let Parent::Mut(par) = self.parent {
                 return (&mut *par).set_pp(p, v);
             }
         }
@@ -124,11 +146,12 @@ impl Scope {
             0 => p.clone(),
             _ => match self.base.as_ref() {
                 Some(b) => b.extend_new(p.pp()),
-                None => match self.parent {
-                    Some(par) => unsafe {
-                        return (&*par).in_context(p);
-                    },
-                    None => return Err(ActionError::new("Cannot find context for '.'")),
+                None => unsafe{ 
+                    match self.parent {
+                        Parent::Const(par)=>return (&*par).in_context(p),
+                        Parent::Mut(par)=>return (&*par).in_context(p),
+                        Parent::None => return Err(ActionError::new("Cannot find context for '.'")),
+                    }
                 },
             },
         };
@@ -170,17 +193,27 @@ impl Scope {
             ActionError::new(s)
         };
         match a {
-            Action::Select(proto) => {
+            Action::Show(proto) => {
                 let np = self.in_context(&proto)?;
                 match self.get_pp(np.pp()) {
-                    Some(_) => {}
-                    _ => {
-                        self.set_pp(np.pp(), Value::tree())
-                            .map_err(|_| err("count not Create object for selct"))?;
-                    }
+                    Some(v) => println!("{}", v.print(0)),
+                    None => println!("Empty"),
                 }
-                self.base = Some(np.clone());
-                println!("set base {:?}", np);
+            }
+            Action::Select(proto_op) => {
+                if let Some(proto) = proto_op {
+                    let np = self.in_context(&proto)?;
+                    match self.get_pp(np.pp()) {
+                        Some(_) => {}
+                        _ => {
+                            self.set_pp(np.pp(), Value::tree())
+                                .map_err(|_| err("count not Create object for selct"))?;
+                        }
+                    }
+                    self.base = Some(np);
+                    return Ok(None);
+                }
+                self.base = None;
             }
             Action::Set(proto, v) => {
                 let np = self.in_context(&proto)?;
@@ -215,8 +248,7 @@ impl Scope {
             }
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
-                //TODO work out how to pass params
-                return self.call_func(proto, params);
+                return self.call_func_mut(proto, params);
             }
         };
         Ok(None)

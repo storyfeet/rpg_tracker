@@ -7,7 +7,8 @@ use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    Select(Proto),
+    Show(Proto),
+    Select(Option<Proto>),
     Add(Proto, Value),
     Sub(Proto, Value),
     Set(Proto, Value),
@@ -39,7 +40,8 @@ impl Action {
 
     pub fn from_proto(p: Proto, t: &mut TokPrev) -> Result<Action, LineError> {
         match t.next() {
-            None | Some(Token::Break) => Ok(Action::Select(p)),
+            None | Some(Token::Break) => Ok(Action::Show(p)),
+            Some(Token::Colon) => Ok(Action::Select(Some(p))),
             Some(Token::Equals) => Ok(Action::Set(p, Value::from_tokens(t)?)),
             Some(Token::Add) => Ok(Action::Add(p, Value::from_tokens(t)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Value::from_tokens(t)?)),
@@ -67,6 +69,7 @@ impl Action {
                 t.read_to_break();
                 return Self::from_tokens(t);
             }
+            Token::Colon => Ok(Action::Select(None)),
             Token::Mul | Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
                 t.back();
                 let p = Proto::from_tokens(t);
