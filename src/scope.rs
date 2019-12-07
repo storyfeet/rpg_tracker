@@ -55,7 +55,7 @@ impl Scope {
     pub fn call_func_const(
         &self,
         proto: Proto,
-        params: Vec<Value>,
+        params: &[Value],
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -68,7 +68,7 @@ impl Scope {
     pub fn call_func_mut(
         &mut self,
         proto: Proto,
-        params: Vec<Value>,
+        params: &[Value],
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -78,7 +78,7 @@ impl Scope {
         wrap.run_func(proto, params)
     }
 
-    fn run_func(&mut self, proto: Proto, params: Vec<Value>) -> Result<Option<Value>, ActionError> {
+    fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
         //println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
@@ -96,7 +96,7 @@ impl Scope {
             self.set_param("self", Value::Proto(nparent));
         }
 
-        for a in actions {
+        for a in &actions {
             let done = self.do_action(a);
             match done {
                 Ok(Some(v)) => {
@@ -172,19 +172,15 @@ impl Scope {
         }
         Ok(res)
     }
-    pub fn resolve(&self, v: Value) -> Result<Value, ActionError> {
-        /*println!(
-            "resolve {:?}\n{:?}",
-            self.get_pp(Proto::one("self", 0).pp()),
-            v.print(0)
-        );*/
+    pub fn resolve(&self, v: &Value) -> Result<Value, ActionError> {
         match v {
-            Value::Ex(e) => e.eval(self),
-            Value::Proto(mut p) => {
+            Value::Ex(ref e) => e.eval(self),
+            Value::Proto(ref p) => {
+                let mut res = p.clone();
                 let dc = p.derefs;
                 for i in 0..dc {
-                    match self.get_pp(p.pp()) {
-                        Some(Value::Proto(np)) => p = np.clone(),
+                    match self.get_pp(res.pp()) {
+                        Some(Value::Proto(np)) => res = np.clone(),
                         Some(v) => {
                             if i + 1 == dc {
                                 return Ok(v.clone());
@@ -195,13 +191,13 @@ impl Scope {
                         None => return Err(ActionError::new("deref to nothing")),
                     }
                 }
-                Ok(Value::Proto(p))
+                Ok(Value::Proto(res))
             }
-            _ => Ok(v),
+            _ => Ok(v.clone()),
         }
     }
 
-    pub fn do_action(&mut self, a: Action) -> Result<Option<Value>, ActionError> {
+    pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
         fn err(s: &str) -> ActionError {
             ActionError::new(s)
         };
@@ -229,12 +225,12 @@ impl Scope {
                 self.base = None;
             }
             Action::Set(proto, v) => {
-                let np = self.in_context(&proto)?;
+                let np = self.in_context(proto)?;
                 self.set_pp(np.pp(), self.resolve(v)?)
                     .map_err(|_| err("Could not Set"))?;
             }
             Action::Add(proto, v) => {
-                let np = self.in_context(&proto)?;
+                let np = self.in_context(proto)?;
                 match self.get_pp(np.pp()) {
                     Some(ov) => {
                         let nv = ov.clone().try_add(self.resolve(v)?)?;
@@ -254,14 +250,14 @@ impl Scope {
                         self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.set_pp(np.pp(), self.resolve(v.try_neg()?)?)
+                        self.set_pp(np.pp(), self.resolve(&v.clone().try_neg()?)?)
                             .map_err(|_| err("Coult not add"))?;
                     }
                 }
             }
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
-                return self.call_func_mut(proto, params);
+                return self.call_func_mut(proto.clone(), params);
             }
         };
         Ok(None)

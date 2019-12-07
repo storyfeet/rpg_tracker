@@ -17,6 +17,10 @@ pub enum Expr {
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
+    LThan(Box<Expr>, Box<Expr>),
+    GThan(Box<Expr>, Box<Expr>),
+    And(Box<Expr>, Box<Expr>),
+    Or(Box<Expr>, Box<Expr>),
     Neg(Box<Expr>),
     Op(Token),
 }
@@ -92,14 +96,15 @@ impl Expr {
         use Expr::*;
         Ok(match self {
             Num(n) => Value::num(*n),
-            Proto(p) => scope.resolve(Value::Proto(p.with_deref(1)))?,
+            Proto(p) => scope.resolve(&Value::Proto(p.with_deref(1)))?,
             Add(a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
             Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
+            LThan(a, b) => Value::num((a.eval(scope)? < b.eval(scope)?) as i32),
             Func(nm, params) => scope
-                .call_func_const(nm.clone(), params.to_vec())?
+                .call_func_const(nm.clone(), params)?
                 .ok_or(ActionError::new("func in expression returns no value"))?,
             _ => Value::num(0),
         })
@@ -158,7 +163,14 @@ impl Expr {
                 }
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
-                Token::Add | Token::Sub | Token::Mul | Token::Div => parts.push(Expr::Op(t)),
+                Token::Add
+                | Token::Sub
+                | Token::Mul
+                | Token::Div
+                | Token::GThan
+                | Token::LThan
+                | Token::Amp
+                | Token::Or => parts.push(Expr::Op(t)),
                 Token::Num(n) => parts.push(Expr::Num(n)),
                 _ => return Err(it.err("Unexptected token in expression")),
             }

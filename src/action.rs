@@ -82,4 +82,12 @@ impl Action {
             e => Err(t.err(&format!("UX - {:?}", e))),
         }
     }
+
+    //if the function should be added to the
+    pub fn is_fileworthy(&self) -> bool {
+        match self {
+            Action::Show(_) | Action::Expr(_) => false,
+            _ => true,
+        }
+    }
 }

@@ -20,6 +20,10 @@ pub enum Token {
     BClose,
     SBOpen,
     SBClose,
+    Or,
+    Amp,
+    LThan,
+    GThan,
     Qoth(String),
 }
 
@@ -48,6 +52,10 @@ impl Token {
             '[' => Some(Token::SBOpen),
             ']' => Some(Token::SBClose),
             ',' => Some(Token::Comma),
+            '|' => Some(Token::Or),
+            '&' => Some(Token::Amp),
+            '<' => Some(Token::LThan),
+            '>' => Some(Token::GThan),
             '\n' | ';' => Some(Token::Break),
             _ => None,
         }
@@ -67,10 +75,6 @@ impl<'a> Tokenizer<'a> {
             line_no: 0,
             prev: None,
         }
-    }
-
-    pub fn previous(&mut self) -> Option<Token> {
-        self.prev.clone()
     }
 
     fn read_num(&mut self) -> i32 {

@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
+    Bool(bool),
     Num(i32),
     Ex(Expr),
     Str(String),

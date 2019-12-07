@@ -5,12 +5,12 @@ mod parse;
 mod prev_iter;
 mod proto;
 mod scope;
-//mod stack;
 mod token;
 mod value;
 
-//use dndata::DnData;
 use scope::Scope;
+use std::io::Write;
+use std::path::Path;
 
 use clap_conf::prelude::*;
 
@@ -27,7 +27,7 @@ fn main() -> Result<(), failure::Error> {
 
     let fname = cfg.grab_local().arg("file").req()?;
 
-    let fs = std::fs::read_to_string(fname)?;
+    let fs = std::fs::read_to_string(&fname)?;
 
     let r = parse::ActionReader::new(&fs);
 
@@ -45,7 +45,7 @@ fn main() -> Result<(), failure::Error> {
                 continue;
             }
         };
-        if let Err(e) = scope.do_action(a.action) {
+        if let Err(e) = scope.do_action(&a.action) {
             println!("Error {} at {}", e, a.line)
         }
     }
@@ -54,22 +54,35 @@ fn main() -> Result<(), failure::Error> {
         let mut input = String::new();
         std::io::stdin().read_line(&mut input)?;
         if input == "quit\n" {
-            break;
+            return Ok(());
         }
 
         for a in parse::ActionReader::new(&input) {
             match a {
-                Ok(ac) => match scope.do_action(ac.action) {
-                    Ok(Some(v)) => println!("{}", v.print(0)),
-                    Ok(None) => {}
+                Ok(ac) => match scope.do_action(&ac.action) {
+                    Ok(Some(v)) => {
+                        if ac.action.is_fileworthy() {
+                            write_action(&fname, &input)?;
+                        }
+                        println!("{}", v.print(0));
+                    }
+                    Ok(None) => {
+                        if ac.action.is_fileworthy() {
+                            write_action(&fname, &input)?;
+                        }
+                    }
                     Err(e) => println!("Error {}", e),
                 },
                 Err(e) => println!("Error {}", e),
             }
         }
     }
+}
 
-    println!("{:?}", scope);
-
-    Ok(())
+pub fn write_action<P: AsRef<Path>>(fname: P, s: &str) -> std::io::Result<()> {
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .open(fname)?;
+    writeln!(f, "{}", s)
 }

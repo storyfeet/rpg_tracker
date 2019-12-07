@@ -11,8 +11,8 @@ Dagger:
 
 Player:
     .print=func()[
-        var.v.HP = ($self.HP+100)
-        v.Health = ($self.Health() -$v.HP)
+        var.v.HP = ($self.HP)
+        v.Health = ($self.Health())
         v
     ]
     .HP=10
@@ -40,6 +40,22 @@ Bill:
 
 River = $*Player
 River:
-    .HP -3
+    .HP =7
     .items.Flowers = 3
+
+River.Dam +2
+
+
+
+River.print()
+
+River.HP+3
+
+River.print()
+
+River.Dam =0 
+
+River.print()
+
+Bill.items.GP + 10
 

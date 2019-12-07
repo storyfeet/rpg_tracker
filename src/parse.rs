@@ -1,18 +1,12 @@
-use crate::error::LineError;
-use crate::prev_iter::{ LineCounter};
-use crate::token::{TokPrev};
 use crate::action::Action;
+use crate::error::LineError;
+use crate::prev_iter::LineCounter;
+use crate::token::TokPrev;
 
 #[derive(Debug, Clone)]
 pub struct LineAction {
     pub action: Action,
     pub line: usize,
-}
-
-impl LineAction {
-    pub fn err(&self, s: &str) -> LineError {
-        LineError::new(&format!("{:?}:{}", self.action, s), self.line)
-    }
 }
 
 pub struct ActionReader<'a> {
@@ -34,26 +28,22 @@ impl<'a> ActionReader<'a> {
         }
     }
 
-    pub fn line_acc(&self, action:Action)->LineAction{
-        LineAction{
-            line:self.line(),
+    pub fn line_acc(&self, action: Action) -> LineAction {
+        LineAction {
+            line: self.line(),
             action,
         }
-    }
-
-    pub fn done(self) -> TokPrev<'a> {
-        self.it
     }
 }
 impl<'a> Iterator for ActionReader<'a> {
     type Item = Result<LineAction, LineError>;
     fn next(&mut self) -> Option<Self::Item> {
-        match Action::from_tokens(&mut self.it){
-            Ok(v)=> Some(Ok(self.line_acc(v))),
-            Err(e)=>{
+        match Action::from_tokens(&mut self.it) {
+            Ok(v) => Some(Ok(self.line_acc(v))),
+            Err(e) => {
                 if e.eof {
                     None
-                }else{
+                } else {
                     Some(Err(e))
                 }
             }
