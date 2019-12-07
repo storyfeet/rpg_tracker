@@ -90,6 +90,7 @@ impl Value {
     }
 
     pub fn get_path<'a>(&'a self, pp: &mut ProtoP) -> Option<&'a Value> {
+        //println!("value::get_path({:?},{:?})", self, pp);
         if let Value::Proto(_) = self {
             return Some(self);
         };

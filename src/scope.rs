@@ -79,7 +79,7 @@ impl Scope {
     }
 
     fn run_func(&mut self, proto: Proto, params: Vec<Value>) -> Result<Option<Value>, ActionError> {
-        println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
+        //println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
         let (pnames, actions) = match self.get_pp(np.pp()) {
@@ -92,7 +92,9 @@ impl Scope {
                 self.set_param(&pnames[p], params[p].clone());
             }
         }
-        self.set_param("self", Value::Proto(nparent));
+        if nparent.pp().next() != Some("self") {
+            self.set_param("self", Value::Proto(nparent));
+        }
 
         for a in actions {
             let done = self.do_action(a);
@@ -163,7 +165,7 @@ impl Scope {
         };
         let dcount = res.derefs;
         for _ in 0..dcount {
-            println!("dereffing");
+            //println!("dereffing");
             if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
                 res = der.clone();
             }
@@ -171,11 +173,11 @@ impl Scope {
         Ok(res)
     }
     pub fn resolve(&self, v: Value) -> Result<Value, ActionError> {
-        println!(
+        /*println!(
             "resolve {:?}\n{:?}",
             self.get_pp(Proto::one("self", 0).pp()),
             v.print(0)
-        );
+        );*/
         match v {
             Value::Ex(e) => e.eval(self),
             Value::Proto(mut p) => {

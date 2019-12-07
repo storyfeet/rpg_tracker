@@ -11,8 +11,8 @@ Dagger:
 
 Player:
     .print=func()[
-        var.v.HP = ($self.HP)
-        v.Health = ($self.Health())
+        var.v.HP = ($self.HP+100)
+        v.Health = ($self.Health() -$v.HP)
         v
     ]
     .HP=10
