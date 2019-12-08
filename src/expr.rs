@@ -10,7 +10,7 @@ use std::str::FromStr;
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Val(Value),
-    Func(Proto, Vec<Value>),
+    CallFunc(Proto, Vec<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
@@ -36,7 +36,7 @@ impl Expr {
     pub fn num(n: i32) -> Self {
         Expr::Val(Value::Num(n))
     }
-    pub fn neg(e:Expr)->Self{
+    pub fn neg(e: Expr) -> Self {
         Expr::Neg(Box::new(e))
     }
 
@@ -44,14 +44,14 @@ impl Expr {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
-            Val(n) => scope.resolve(n)?,
+            Val(n) => n.resolve_path(scope)?,
             Add(a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
             Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
             //LThan(a, b) => Value::num((a.eval(scope)? < b.eval(scope)?) as i32),
-            Func(nm, params) => scope
+            CallFunc(nm, params) => scope
                 .call_func_const(nm.clone(), params)?
                 .ok_or(ActionError::new("func in expression returns no value"))?,
             _ => Value::Num(0),
@@ -73,20 +73,47 @@ impl Expr {
 
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         match it.next().ok_or(it.eof())? {
-            Token::BOpen=>{},
-            Token::Sub=>return Ok(Expr::neg(Expr::from_tokens(it)?)),
+            Token::BOpen => {}// pass on to expr list
+            Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
+            Token::GThan => return Ok(Expr::Val(Value::func_def(it)?)),
+            Token::Ident(_) | Token::Dot | Token::Mul => {
+                it.back();
+                let p = Proto::from_tokens(it);
+                match it.next() {
+                    Some(Token::BOpen) => {
+                        //callfunc params
+                        let mut params = Vec::new();
+                        while let Some(tk) = it.next(){
+                            match tk{
+                                Token::Comma|Token::Break=>{},
+                                Token::BClose=>{
+                                    return Ok(Expr::CallFunc(p,params));
+                                }
+                                _=>{
+                                    it.back();
+                                    params.push(Expr::from_tokens(it)?);
+                                }
+                            }
+                        }
+                        return Err(it.eof());
+                    }
+                    Some(_) => {
+                        it.back();
+                        return Ok(Expr::Val(Value::Proto(p)));
+                    }
+
+                    None => return Ok(Expr::Val(Value::Proto(p))),
+                }
+            }
             _ => {
                 it.back();
                 return Ok(Expr::Val(Value::from_tokens(it)?));
             }
         }
+        //only get here if Bracket Open '('
         let mut parts = Vec::new();
         while let Some(t) = it.next() {
             match t {
-                Token::Dollar => {
-                    let pt = Proto::from_tokens(it);
-                    }
-                }
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
                 Token::Add
@@ -97,8 +124,11 @@ impl Expr {
                 | Token::LThan
                 | Token::Amp
                 | Token::Or => parts.push(Expr::Op(t)),
-                Token::Num(n) => parts.push(Expr::Val(Value::Num(n))),
-                _ => return Err(it.err("Unexptected token in expression")),
+                _ => {
+                    it.back();
+                    parts.push(Expr::from_tokens(it)?);
+                }
+
             }
         }
 

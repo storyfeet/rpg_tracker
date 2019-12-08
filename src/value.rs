@@ -6,6 +6,7 @@ use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
+use crate::scope::Scope;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -15,7 +16,6 @@ pub enum Value {
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
-    CallFunc(Proto,Vec<Value>),
     FuncDef(Vec<String>, Vec<Action>),
 }
 
@@ -38,6 +38,7 @@ impl Value {
         use Value::*;
         let mut res = String::new();
         match self {
+            Bool(b)=> res.push_str(&b.to_string()),
             Num(n) => res.push_str(&n.to_string()),
             Tree(t) => {
                 for (k, v) in t {
@@ -238,36 +239,72 @@ impl From<String> for Value {
 }
 
 impl Value {
-    pub fn func_def(t: &mut TokPrev) -> Result<Self, LineError> {
+
+
+    pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
+        match self {
+            Value::Proto(ref p) => {
+                let mut res = p.clone();
+                let dc = p.derefs;
+                for i in 0..dc {
+                    match scope.get_pp(res.pp()) {
+                        Some(Value::Proto(np)) => res = np.clone(),
+                        Some(v) => {
+                            if i + 1 == dc {
+                                return Ok(v.clone());
+                            } else {
+                                return Err(ActionError::new("deref beyond protos"));
+                            }
+                        }
+                        None => return Err(ActionError::new("deref to nothing")),
+                    }
+                }
+                Ok(Value::Proto(res))
+            }
+            _ => Ok(self.clone()),
+        }
+    }
+
+
+    pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
-        if t.next() != Some(Token::BOpen) {
-            return Err(t.err("Func should start with '('"));
+        match it.next().as_ref().ok_or(it.eof())?{
+            Token::Ident(x)=>{
+                if x == "ex" {
+                    let ex = Expr::from_tokens(it)?;
+                    return Ok(Value::FuncDef(Vec::new(),vec![Action::Expr(ex)]));
+                }
+            }
+            _=>it.back(),
+        }
+        if it.next() != Some(Token::BOpen) {
+            return Err(it.err("Func should start with '('"));
         }
 
         let mut params = Vec::new();
         //loop params
-        while let Some(tk) = t.next() {
+        while let Some(tk) = it.next() {
             match tk {
                 Token::Ident(s) => params.push(s),
                 Token::Comma | Token::Break => {}
                 Token::BClose => break,
-                e => return Err(t.err(&format!("Ux {:?} in func params", e))),
+                e => return Err(it.err(&format!("Ux {:?} in func params", e))),
             }
         }
 
-        if t.next() != Some(Token::SBOpen) {
-            return Err(t.err("Func has nothing to do"));
+        if it.next() != Some(Token::SBOpen) {
+            return Err(it.err("Func has nothing to do"));
         }
 
         let mut actions = Vec::new();
         //loop actions
-        while let Some(tk) = t.next() {
+        while let Some(tk) = it.next() {
             match tk {
                 Token::SBClose => break,
                 Token::Comma | Token::Break => {}
                 _ => {
-                    t.back();
-                    actions.push(Action::from_tokens(t)?);
+                    it.back();
+                    actions.push(Action::from_tokens(it)?);
                 }
             }
         }
@@ -283,54 +320,32 @@ impl Value {
             Some(Token::Ident(s)) => match s.as_ref() {
                 "func" => return Self::func_def(it),
                 "expr" => {
-                    let ev = vec![Action::Expr(Expr::from_tokens(t)?)];
+                    let ev = vec![Action::Expr(Expr::from_tokens(it)?)];
                     Ok(Value::FuncDef(Vec::new(), ev))
                 }
                 sv => Ok(Value::str(sv)),
             },
             Some(Token::Num(n)) => Ok(Value::Num(n)),
-            Some(Token::Dollar) => {
-                let pt = Value::Proto(Proto::from_tokens(t));
-                match it.next() {
-                    Some(Token::BOpen) => {
-                        let mut params = Vec::new();
-                        while let Some(tk) = it.next() {
-                            match tk {
-                                Token::BClose => {
-                                    parts.push(Expr::Func(pt, params));
-                                    break;
-                                }
-                                Token::Comma => {}
-                                _ => {
-                                    it.back();
-                                    params.push(Value::from_tokens(it)?);
-                                }
-                            }
-                        }
-                    }
-                    _ => {
-                        it.back();
-                        parts.push(Expr::Proto(pt));
-                    }
-            }
+            Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(it))),
+            Some(Token::GThan)=>Ok(Value::func_def(it)?),
                 
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
-                while let Some(v) = t.next() {
+                while let Some(v) = it.next() {
                     match v {
-                        Token::Comma => {}
+                        Token::Comma|Token::Break => {}
                         Token::SBClose => return Ok(Value::List(rlist)),
 
                         _ => {
-                            t.back();
-                            rlist.push(Value::from_tokens(t)?)
+                            it.back();
+                            rlist.push(Value::from_tokens(it)?)
                         }
                     }
                 }
 
-                Err(t.err("UX-EOF"))
+                Err(it.err("UX-EOF"))
             }
-            v => Err(t.err(&format!("UX - {:?}", v))),
+            v => Err(it.err(&format!("UX - {:?}", v))),
         }
     }
 }

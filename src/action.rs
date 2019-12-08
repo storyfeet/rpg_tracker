@@ -3,7 +3,6 @@ use crate::expr::Expr;
 use crate::prev_iter::{Backer, LineCounter};
 use crate::proto::Proto;
 use crate::token::{TokPrev, Token};
-use crate::value::Value;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -12,7 +11,7 @@ pub enum Action {
     Add(Proto, Expr),
     Sub(Proto, Expr),
     Set(Proto, Expr),
-    CallFunc(Proto, Vec<Value>),
+    CallFunc(Proto, Vec<Expr>),
     Expr(Expr),
 }
 
@@ -32,8 +31,8 @@ impl Action {
             .map_err(|p| p.set_line(t.line()))?
             .to_string();
         match sign {
-            Token::Add => Ok(Action::Add(Proto::one(&id, 1),Expr::num(n))),
-            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1),Expr::num(n))),
+            Token::Add => Ok(Action::Add(Proto::one(&id, 1), Expr::num(n))),
+            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1), Expr::num(n))),
             _ => Err(t.err("Not Addable")),
         }
     }
@@ -53,7 +52,7 @@ impl Action {
                         Token::BClose => return Ok(Action::CallFunc(p, params)),
                         _ => {
                             t.back();
-                            params.push(Value::from_tokens(t)?);
+                            params.push(Expr::from_tokens(t)?);
                         }
                     }
                 }

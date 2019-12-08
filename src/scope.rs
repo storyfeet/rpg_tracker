@@ -1,5 +1,6 @@
 use crate::action::Action;
 use crate::error::ActionError;
+use crate::expr::Expr;
 use crate::proto::{Proto, ProtoP};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
@@ -55,7 +56,7 @@ impl Scope {
     pub fn call_func_const(
         &self,
         proto: Proto,
-        params: &[Value],
+        params: &[Expr],
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -68,7 +69,7 @@ impl Scope {
     pub fn call_func_mut(
         &mut self,
         proto: Proto,
-        params: &[Value],
+        params: &[Expr],
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -78,7 +79,7 @@ impl Scope {
         wrap.run_func(proto, params)
     }
 
-    fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
+    fn run_func(&mut self, proto: Proto, params: &[Expr]) -> Result<Option<Value>, ActionError> {
         //println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
@@ -89,7 +90,8 @@ impl Scope {
 
         for p in 0..params.len() {
             if pnames.len() > p {
-                self.set_param(&pnames[p], params[p].clone());
+                let v = params[p].eval(self)?;
+                self.set_param(&pnames[p], v);
             }
         }
         if nparent.pp().next() != Some("self") {
@@ -172,30 +174,6 @@ impl Scope {
         }
         Ok(res)
     }
-    pub fn resolve(&self, v: &Value) -> Result<Value, ActionError> {
-        match v {
-            Value::Ex(ref e) => e.eval(self),
-            Value::Proto(ref p) => {
-                let mut res = p.clone();
-                let dc = p.derefs;
-                for i in 0..dc {
-                    match self.get_pp(res.pp()) {
-                        Some(Value::Proto(np)) => res = np.clone(),
-                        Some(v) => {
-                            if i + 1 == dc {
-                                return Ok(v.clone());
-                            } else {
-                                return Err(ActionError::new("deref beyond protos"));
-                            }
-                        }
-                        None => return Err(ActionError::new("deref to nothing")),
-                    }
-                }
-                Ok(Value::Proto(res))
-            }
-            _ => Ok(v.clone()),
-        }
-    }
 
     pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
         fn err(s: &str) -> ActionError {
@@ -226,18 +204,18 @@ impl Scope {
             }
             Action::Set(proto, v) => {
                 let np = self.in_context(proto)?;
-                self.set_pp(np.pp(), self.resolve(v)?)
+                self.set_pp(np.pp(), v.eval(self)?)
                     .map_err(|_| err("Could not Set"))?;
             }
             Action::Add(proto, v) => {
                 let np = self.in_context(proto)?;
                 match self.get_pp(np.pp()) {
                     Some(ov) => {
-                        let nv = ov.clone().try_add(self.resolve(v)?)?;
+                        let nv = ov.clone().try_add(v.eval(self)?)?;
                         self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.set_pp(np.pp(), self.resolve(v)?)
+                        self.set_pp(np.pp(), v.eval(self)?)
                             .map_err(|_| err("Coult not add"))?;
                     }
                 }
@@ -246,18 +224,18 @@ impl Scope {
                 let np = self.in_context(&proto)?;
                 match self.get_pp(np.pp()) {
                     Some(ov) => {
-                        let nv = ov.clone().try_sub(self.resolve(v)?)?;
-                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
+                        let nv = ov.clone().try_sub(v.eval(self)?)?;
+                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not sub"))?;
                     }
                     None => {
-                        self.set_pp(np.pp(), self.resolve(&v.clone().try_neg()?)?)
-                            .map_err(|_| err("Coult not add"))?;
+                        self.set_pp(np.pp(), Expr::neg(v.clone()).eval(self)?)
+                            .map_err(|_| err("Coult not sub"))?;
                     }
                 }
             }
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
-                return self.call_func_mut(proto.clone(), params);
+                return self.call_func_mut(proto.clone(), &params);
             }
         };
         Ok(None)
