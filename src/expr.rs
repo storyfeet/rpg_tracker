@@ -10,13 +10,13 @@ use std::str::FromStr;
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Val(Value),
-    CallFunc(Proto, Vec<Expr>),
+    //CallFunc(Proto, Vec<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
-    LThan(Box<Expr>, Box<Expr>),
-    GThan(Box<Expr>, Box<Expr>),
+    Less(Box<Expr>, Box<Expr>),
+    Greater(Box<Expr>, Box<Expr>),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
     Neg(Box<Expr>),
@@ -50,10 +50,11 @@ impl Expr {
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            //LThan(a, b) => Value::num((a.eval(scope)? < b.eval(scope)?) as i32),
-            CallFunc(nm, params) => scope
+            Greater(a,b)=> Value::Bool(a.eval(scope)? >b.eval(scope)?),
+            Less(a,b)=> Value::Bool(a.eval(scope)? <b.eval(scope)?),
+     /*       CallFunc(nm, params) => scope
                 .call_func_const(nm.clone(), params)?
-                .ok_or(ActionError::new("func in expression returns no value"))?,
+                .ok_or(ActionError::new("func in expression returns no value"))?,*/
             _ => Value::Num(0),
         })
     }
@@ -75,36 +76,7 @@ impl Expr {
         match it.next().ok_or(it.eof())? {
             Token::BOpen => {} // pass on to expr list
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
-            Token::GThan => return Ok(Expr::Val(Value::func_def(it)?)),
-            Token::Ident(_) | Token::Dot | Token::Mul => {
-                it.back();
-                let p = Proto::from_tokens(it);
-                match it.next() {
-                    Some(Token::BOpen) => {
-                        //callfunc params
-                        let mut params = Vec::new();
-                        while let Some(tk) = it.next() {
-                            match tk {
-                                Token::Comma | Token::Break => {}
-                                Token::BClose => {
-                                    return Ok(Expr::CallFunc(p, params));
-                                }
-                                _ => {
-                                    it.back();
-                                    params.push(Expr::from_tokens(it)?);
-                                }
-                            }
-                        }
-                        return Err(it.eof());
-                    }
-                    Some(_) => {
-                        it.back();
-                        return Ok(Expr::Val(Value::proto(p)));
-                    }
-
-                    None => return Ok(Expr::Val(Value::proto(p))),
-                }
-            }
+            Token::Greater => return Ok(Expr::Val(Value::func_def(it)?)),
             _ => {
                 it.back();
                 return Ok(Expr::Val(Value::from_tokens(it)?));
@@ -120,8 +92,8 @@ impl Expr {
                 | Token::Sub
                 | Token::Mul
                 | Token::Div
-                | Token::GThan
-                | Token::LThan
+                | Token::Greater
+                | Token::Less
                 | Token::Amp
                 | Token::Or => parts.push(Expr::Op(t)),
                 _ => {
@@ -131,12 +103,17 @@ impl Expr {
             }
         }
 
-        let p = Self::split_op(parts, Token::Mul, |a, b| {
-            Expr::Mul(Box::new(a), Box::new(b))
-        })?;
+        let p = parts;
+        let p = Self::split_op(p, Token::Mul, |a, b| Expr::Mul(Box::new(a), Box::new(b)))?;
         let p = Self::split_op(p, Token::Div, |a, b| Expr::Div(Box::new(a), Box::new(b)))?;
         let p = Self::split_op(p, Token::Sub, |a, b| Expr::Sub(Box::new(a), Box::new(b)))?;
         let p = Self::split_op(p, Token::Add, |a, b| Expr::Add(Box::new(a), Box::new(b)))?;
+        let p = Self::split_op(p, Token::Greater, |a, b| {
+            Expr::Greater(Box::new(a), Box::new(b))
+        })?;
+        let p = Self::split_op(p, Token::Less, |a, b| Expr::Less(Box::new(a), Box::new(b)))?;
+        let p = Self::split_op(p, Token::Amp, |a, b| Expr::And(Box::new(a), Box::new(b)))?;
+        let p = Self::split_op(p, Token::Or, |a, b| Expr::Or(Box::new(a), Box::new(b)))?;
 
         Ok(p[0].clone())
     }

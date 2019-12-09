@@ -22,8 +22,10 @@ pub enum Token {
     SBClose,
     Or,
     Amp,
-    LThan,
-    GThan,
+    Less,
+    Greater,
+    True,
+    False,
     Qoth(String),
 }
 
@@ -52,10 +54,8 @@ impl Token {
             '[' => Some(Token::SBOpen),
             ']' => Some(Token::SBClose),
             ',' => Some(Token::Comma),
-            '|' => Some(Token::Or),
-            '&' => Some(Token::Amp),
-            '<' => Some(Token::LThan),
-            '>' => Some(Token::GThan),
+            '<' => Some(Token::Less),
+            '>' => Some(Token::Greater),
             '\n' | ';' => Some(Token::Break),
             _ => None,
         }
@@ -160,7 +160,12 @@ impl<'a> Iterator for Tokenizer<'a> {
             }
             _ => {
                 self.it.back();
-                Token::Ident(self.read_ident())
+                let id = self.read_ident();
+                match id.as_ref(){
+                    "true"=>Token::True,
+                    "false"=>Token::False,
+                    _=> Token::Ident(id),
+                }
             }
         };
 

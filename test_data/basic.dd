@@ -3,6 +3,7 @@ Weapon:
     .Dam=3
     .view=[Dam,Acc,Range]
 
+Dagger = $Weapon
 Dagger:
     .proto = $Weapon
     .Acc=d6 
@@ -11,25 +12,25 @@ Dagger:
 
 Player:
     .print=>fn()[
-        var.v.HP = $*self.HP
+        var.v.HP = $self.HP
         v.Health = self.Health()
         v
     ]
     .HP=10
     .Dam=0
-    .Health=>ex($*self.HP - $*self.Dam)
+    .Health=>ex($self.HP - $self.Dam)
     .battle_view = [HP,Dam,Health]
 
-Bill = $*Player
+Bill = $Player
 Bill:
     .HP+5
-    .weapons=[3,>ex($d6+2),4,harold]
+    .weapons=[Dagger,Fish]
     .Str=5
-    .Acc=>ex($d3)
+    .Acc=>ex(d(3))
     .Speed=23
     .run=>fn(red)[
-        *red.GP+4
-        *red.GP
+        $red.GP+4
+        $red.GP
     ]
     .items:
     +10 GP
@@ -38,11 +39,13 @@ Bill:
     +3 Pig
     -Pig
 
-River = $*Player
+River = $Player
 River:
     .HP =7
     .items.Flowers = 3
 
 River.Dam +2
 
+
+River.HP + 7
 

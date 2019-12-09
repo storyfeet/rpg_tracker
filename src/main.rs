@@ -1,4 +1,5 @@
 mod action;
+mod api_funcs;
 mod error;
 mod expr;
 mod parse;
@@ -7,14 +8,12 @@ mod proto;
 mod scope;
 mod token;
 mod value;
-mod api_funcs;
 
 use scope::Scope;
 use std::io::Write;
 use std::path::Path;
 
 use clap_conf::prelude::*;
-
 
 fn main() -> Result<(), failure::Error> {
     let clp = clap_app!(DnDTracker =>
@@ -29,9 +28,9 @@ fn main() -> Result<(), failure::Error> {
 
     let fname = cfg.grab_local().arg("file").done();
 
-    let mut scope = match fname{
+    let mut scope = match fname {
         Some(ref name) => Scope::from_file(name)?,
-        None=>{
+        None => {
             println!("No working file");
             Scope::new()
         }
@@ -45,6 +44,7 @@ fn main() -> Result<(), failure::Error> {
         }
 
         for a in parse::ActionReader::new(&input) {
+            println!("--action--{:?}", a);
             match a {
                 Ok(ac) => match scope.do_action(&ac.action) {
                     Ok(Some(v)) => {
@@ -67,9 +67,9 @@ fn main() -> Result<(), failure::Error> {
 }
 
 pub fn write_action<P: AsRef<Path>>(fname: &Option<P>, s: &str) -> std::io::Result<()> {
-    let fname = match fname{
+    let fname = match fname {
         Some(p) => p,
-        None=>return Ok(()),
+        None => return Ok(()),
     };
 
     let mut f = std::fs::OpenOptions::new()

@@ -69,16 +69,19 @@ impl Action {
                 return Self::from_tokens(t);
             }
             Token::Colon => Ok(Action::Select(None)),
-            Token::Mul | Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
+            Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
                 t.back();
                 let p = Proto::from_tokens(t);
+                //println!("PROTO from_tokens= {:?}",p);
                 Self::from_proto(p, t)
             }
             Token::Break => Self::from_tokens(t),
             Token::Add => Self::from_add_sub(Token::Add, t),
             Token::Sub => Self::from_add_sub(Token::Sub, t),
-            Token::BOpen => Ok(Action::Expr(Expr::from_tokens(t)?)),
-            e => Err(t.err(&format!("UX - {:?}", e))),
+            _ => {
+                t.back();
+                Ok(Action::Expr(Expr::from_tokens(t)?))
+            }
         }
     }
 

@@ -7,6 +7,7 @@ use crate::proto::{Proto, ProtoP};
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
+use std::cmp::{PartialOrd,Ordering};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -17,6 +18,7 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
     FuncDef(Vec<String>, Vec<Action>),
+    FuncCall(Proto,Vec<Expr>),
 }
 
 pub enum SetResult {
@@ -67,6 +69,9 @@ impl Value {
             }
             FuncDef(params, _) => {
                 res.push_str(&format!("func{:?}", params));
+            }
+            FuncCall(p,params)=>{
+                res.push_str(&format!("Call -- {}{:?}",p,params));
             }
             List(l) => {
                 res.push('[');
@@ -164,9 +169,14 @@ impl Value {
         }
     }
 
+    /// Logic Or included
     pub fn try_add(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
+            Bool(a)=> match rhs{
+                Bool(b)=> Ok(Bool(a ||b)),
+                _ => Err(ActionError::new("Bool only adds to bool is OR op")),
+            }
             Num(a) => match rhs {
                 Num(b) => Ok(Num(a + b)),
                 _ => Err(ActionError::new("Cannot add non num to num")),
@@ -216,7 +226,12 @@ impl Value {
     }
 
     pub fn try_mul(self, rhs: Value) -> Result<Value, ActionError> {
+        println!("MUL");
         match self {
+            Value::Bool(a)=>match rhs{
+                Value::Bool(b) => Ok(Value::Bool(a && b)),
+                _ => Err(ActionError::new("Bool can only mul Bool as AND op")),
+            }
             Value::Num(a) => match rhs {
                 Value::Num(b) => Ok(Value::Num(a * b)),
                 _ => Err(ActionError::new("No mul on non num")),
@@ -249,6 +264,21 @@ impl From<String> for Value {
     }
 }
 
+
+impl PartialOrd for Value{
+    fn partial_cmp(&self,other:&Value)->Option<Ordering>{
+        use Value::*;
+        match self{
+            //TODO allow other comparisons
+            Num(a)=>if let Num(b) = other{
+                return a.partial_cmp(b)
+            }
+            _=>return None,
+        }
+        None
+    }
+}
+
 impl Value {
     pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
         match self {
@@ -270,6 +300,8 @@ impl Value {
                 }
                 Ok(Value::Proto(res))
             }
+            Value::FuncCall(ref p,ref params)=>scope.call_func_const(p.clone(),params)?.ok_or(ActionError::new("func in expr returns no value")),
+            
             _ => Ok(self.clone()),
         }
     }
@@ -323,15 +355,34 @@ impl Value {
         match it.next() {
             None => Err(it.err("UX-EOF")),
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
-            Some(Token::Ident(s)) => match s.as_ref() {
-                "true" => Ok(Self::Bool(true)),
-                "false" => Ok(Self::Bool(false)),
-                _ => Ok(Self::Str(s)),
-            },
+            Some(Token::True)=>Ok(Self::Bool(true)),
+            Some(Token::False)=>Ok(Self::Bool(false)),
             Some(Token::Num(n)) => Ok(Value::Num(n)),
-            Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(it))),
-            Some(Token::GThan) => Ok(Value::func_def(it)?),
-
+            Some(Token::Dollar)|Some(Token::Ident(_)) => {
+                it.back();
+                let p = Proto::from_tokens(it);
+                match it.next(){
+                    Some(Token::BOpen)=>{
+                        let mut params = Vec::new();
+                        while let Some(tk) = it.next(){
+                            match tk {
+                                Token::BClose => return Ok(Value::FuncCall(p,params)),
+                                Token::Comma => {},
+                                _=>{
+                                    it.back();
+                                    params.push(Expr::from_tokens(it)?);
+                                }
+                            }
+                        }
+                        Err(it.eof())
+                    }
+                    _=>{
+                        it.back();
+                        Ok(Value::Proto(p))
+                    }
+                }
+            }
+            Some(Token::Greater) => Ok(Value::func_def(it)?),
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = it.next() {

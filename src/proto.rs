@@ -1,5 +1,5 @@
-use crate::prev_iter::{Backer, LineCounter, Prev};
-use crate::token::{Token, Tokenizer};
+use crate::prev_iter::{Backer};
+use crate::token::{Token, TokPrev};
 use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
@@ -10,10 +10,9 @@ pub struct Proto {
 
 impl Display for Proto {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "$")?;
 
         for _ in 0..self.derefs {
-            write!(f, "*")?;
+            write!(f, "$")?;
         }
         for _ in 0..self.dots {
             write!(f, ".")?;
@@ -42,7 +41,7 @@ impl Proto {
         Proto { dots, v, derefs: 0 }
     }
     pub fn new(s: &str) -> Self {
-        let mut t = Prev::new(Tokenizer::new(s));
+        let mut t = TokPrev::new(s);
         Self::from_tokens(&mut t)
     }
 
@@ -61,7 +60,7 @@ impl Proto {
         res
     }
 
-    pub fn from_tokens<T: Iterator<Item = Token> + Backer + LineCounter>(t: &mut T) -> Self {
+    pub fn from_tokens(t:&mut TokPrev) -> Self {
         let mut res = Proto::empty(0);
         while let Some(v) = t.next() {
             match v {
@@ -70,7 +69,7 @@ impl Proto {
                         res.dots += 1
                     }
                 }
-                Token::Mul => {
+                Token::Dollar => {
                     if res.v.len() == 0 {
                         res.derefs += 1
                     }
