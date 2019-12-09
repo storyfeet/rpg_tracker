@@ -1,9 +1,12 @@
 use crate::action::Action;
 use crate::error::ActionError;
 use crate::expr::Expr;
+use crate::parse::ActionReader;
 use crate::proto::{Proto, ProtoP};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
+use std::path::Path;
+use crate::api_funcs;
 
 //unsafe invariant that must be maintained:
 //rescoped Scopes can only be used for immediate function calls
@@ -29,6 +32,40 @@ impl Scope {
             base: None,
             parent: Parent::None,
         }
+    }
+
+    pub fn eat_data(self)->Value{
+        self.data
+    }
+
+    pub fn from_file<P: AsRef<Path>>(fname: P) -> Result<Self, ActionError> {
+        let mut res = Scope::new();
+        res.run_file(fname)?;
+        Ok(res)
+        
+    }
+    pub fn run_file<P:AsRef<Path>>(&mut self,fname:P)->Result<(),ActionError> {
+        let fs = std::fs::read_to_string(&fname).map_err(|e|ActionError::new(&e.to_string()))?;
+        let r = ActionReader::new(&fs);
+
+
+        for a in r {
+            //        println!(" -- {:?}", a);
+            let a = match a {
+                Ok(v) => {
+                    //                println!(" OK {:?}", v);
+                    v
+                }
+                Err(e) => {
+                    println!("Error {}", e);
+                    continue;
+                }
+            };
+            if let Err(e) = self.do_action(&a.action) {
+                println!("Error {} at {}", e, a.line)
+            }
+        }
+        Ok(())
     }
 
     pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
@@ -80,7 +117,12 @@ impl Scope {
     }
 
     fn run_func(&mut self, proto: Proto, params: &[Expr]) -> Result<Option<Value>, ActionError> {
-        //println!("run_func -{:?}", self.get_pp(Proto::one("self", 0).pp()));
+        match proto.pp().next().unwrap_or("") {
+            "d" => return api_funcs::d(self,params),
+            "load"=> return api_funcs::load(self,params),
+            _ => {}
+        }
+
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
         let (pnames, actions) = match self.get_pp(np.pp()) {

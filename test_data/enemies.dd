@@ -1,0 +1,17 @@
+Enemy:
+.Dam=0
+.HP=10
+.Health=>ex($*self.HP-$*self.Dam)
+.Speed=4
+
+Rat = *Enemy
+Rat:
+.HP=5
+.Speed=3
+
+KingRat = *Enemy
+KingRat:
+.HP=10
+.Speed=4
+
+

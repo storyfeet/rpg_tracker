@@ -73,7 +73,7 @@ impl Expr {
 
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         match it.next().ok_or(it.eof())? {
-            Token::BOpen => {}// pass on to expr list
+            Token::BOpen => {} // pass on to expr list
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
             Token::GThan => return Ok(Expr::Val(Value::func_def(it)?)),
             Token::Ident(_) | Token::Dot | Token::Mul => {
@@ -83,13 +83,13 @@ impl Expr {
                     Some(Token::BOpen) => {
                         //callfunc params
                         let mut params = Vec::new();
-                        while let Some(tk) = it.next(){
-                            match tk{
-                                Token::Comma|Token::Break=>{},
-                                Token::BClose=>{
-                                    return Ok(Expr::CallFunc(p,params));
+                        while let Some(tk) = it.next() {
+                            match tk {
+                                Token::Comma | Token::Break => {}
+                                Token::BClose => {
+                                    return Ok(Expr::CallFunc(p, params));
                                 }
-                                _=>{
+                                _ => {
                                     it.back();
                                     params.push(Expr::from_tokens(it)?);
                                 }
@@ -99,10 +99,10 @@ impl Expr {
                     }
                     Some(_) => {
                         it.back();
-                        return Ok(Expr::Val(Value::Proto(p)));
+                        return Ok(Expr::Val(Value::proto(p)));
                     }
 
-                    None => return Ok(Expr::Val(Value::Proto(p))),
+                    None => return Ok(Expr::Val(Value::proto(p))),
                 }
             }
             _ => {
@@ -128,7 +128,6 @@ impl Expr {
                     it.back();
                     parts.push(Expr::from_tokens(it)?);
                 }
-
             }
         }
 

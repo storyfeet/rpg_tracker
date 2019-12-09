@@ -4,9 +4,9 @@ use crate::expr::Expr;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
+use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::collections::BTreeMap;
-use crate::scope::Scope;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -34,11 +34,22 @@ impl Value {
         Value::Str(s.to_string())
     }
 
+    pub fn proto(p:Proto)->Self{
+        if p.dots == 0 && p.derefs == 0{
+            return match p.pp().next().unwrap_or(""){
+                "true"=>Value::Bool(true),
+                "false"=>Value::Bool(false),
+                _=>Value::Proto(p),
+            };
+        }
+        Value::Proto(p)
+    }
+
     pub fn print(&self, depth: usize) -> String {
         use Value::*;
         let mut res = String::new();
         match self {
-            Bool(b)=> res.push_str(&b.to_string()),
+            Bool(b) => res.push_str(&b.to_string()),
             Num(n) => res.push_str(&n.to_string()),
             Tree(t) => {
                 for (k, v) in t {
@@ -239,8 +250,6 @@ impl From<String> for Value {
 }
 
 impl Value {
-
-
     pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
         match self {
             Value::Proto(ref p) => {
@@ -265,17 +274,16 @@ impl Value {
         }
     }
 
-
     pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
-        match it.next().as_ref().ok_or(it.eof())?{
-            Token::Ident(x)=>{
+        match it.next().as_ref().ok_or(it.eof())? {
+            Token::Ident(x) => {
                 if x == "ex" {
                     let ex = Expr::from_tokens(it)?;
-                    return Ok(Value::FuncDef(Vec::new(),vec![Action::Expr(ex)]));
+                    return Ok(Value::FuncDef(Vec::new(), vec![Action::Expr(ex)]));
                 }
             }
-            _=>it.back(),
+            _ => it.back(),
         }
         if it.next() != Some(Token::BOpen) {
             return Err(it.err("Func should start with '('"));
@@ -311,29 +319,24 @@ impl Value {
         Ok(Value::FuncDef(params, actions))
     }
 
-
-
     pub fn from_tokens(it: &mut TokPrev) -> Result<Self, LineError> {
         match it.next() {
             None => Err(it.err("UX-EOF")),
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
             Some(Token::Ident(s)) => match s.as_ref() {
-                "func" => return Self::func_def(it),
-                "expr" => {
-                    let ev = vec![Action::Expr(Expr::from_tokens(it)?)];
-                    Ok(Value::FuncDef(Vec::new(), ev))
-                }
-                sv => Ok(Value::str(sv)),
+                "true" => Ok(Self::Bool(true)),
+                "false" => Ok(Self::Bool(false)),
+                _ => Ok(Self::Str(s)),
             },
             Some(Token::Num(n)) => Ok(Value::Num(n)),
             Some(Token::Dollar) => Ok(Value::Proto(Proto::from_tokens(it))),
-            Some(Token::GThan)=>Ok(Value::func_def(it)?),
-                
+            Some(Token::GThan) => Ok(Value::func_def(it)?),
+
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = it.next() {
                     match v {
-                        Token::Comma|Token::Break => {}
+                        Token::Comma | Token::Break => {}
                         Token::SBClose => return Ok(Value::List(rlist)),
 
                         _ => {
