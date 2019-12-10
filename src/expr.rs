@@ -1,7 +1,6 @@
 use crate::error::{ActionError, LineError};
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
-use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
@@ -50,11 +49,11 @@ impl Expr {
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            Greater(a,b)=> Value::Bool(a.eval(scope)? >b.eval(scope)?),
-            Less(a,b)=> Value::Bool(a.eval(scope)? <b.eval(scope)?),
-     /*       CallFunc(nm, params) => scope
-                .call_func_const(nm.clone(), params)?
-                .ok_or(ActionError::new("func in expression returns no value"))?,*/
+            Greater(a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
+            Less(a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
+            /*       CallFunc(nm, params) => scope
+            .call_func_const(nm.clone(), params)?
+            .ok_or(ActionError::new("func in expression returns no value"))?,*/
             _ => Value::Num(0),
         })
     }
@@ -76,7 +75,6 @@ impl Expr {
         match it.next().ok_or(it.eof())? {
             Token::BOpen => {} // pass on to expr list
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
-            Token::Greater => return Ok(Expr::Val(Value::func_def(it)?)),
             _ => {
                 it.back();
                 return Ok(Expr::Val(Value::from_tokens(it)?));

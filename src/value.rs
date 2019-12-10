@@ -6,8 +6,8 @@ use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoP};
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
+use std::cmp::{Ordering, PartialOrd};
 use std::collections::BTreeMap;
-use std::cmp::{PartialOrd,Ordering};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -18,7 +18,7 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
     FuncDef(Vec<String>, Vec<Action>),
-    FuncCall(Proto,Vec<Expr>),
+    FuncCall(Proto, Vec<Expr>),
 }
 
 pub enum SetResult {
@@ -36,12 +36,12 @@ impl Value {
         Value::Str(s.to_string())
     }
 
-    pub fn proto(p:Proto)->Self{
-        if p.dots == 0 && p.derefs == 0{
-            return match p.pp().next().unwrap_or(""){
-                "true"=>Value::Bool(true),
-                "false"=>Value::Bool(false),
-                _=>Value::Proto(p),
+    pub fn proto(p: Proto) -> Self {
+        if p.dots == 0 && p.derefs == 0 {
+            return match p.pp().next().unwrap_or("") {
+                "true" => Value::Bool(true),
+                "false" => Value::Bool(false),
+                _ => Value::Proto(p),
             };
         }
         Value::Proto(p)
@@ -70,8 +70,8 @@ impl Value {
             FuncDef(params, _) => {
                 res.push_str(&format!("func{:?}", params));
             }
-            FuncCall(p,params)=>{
-                res.push_str(&format!("Call -- {}{:?}",p,params));
+            FuncCall(p, params) => {
+                res.push_str(&format!("Call -- {}{:?}", p, params));
             }
             List(l) => {
                 res.push('[');
@@ -173,10 +173,10 @@ impl Value {
     pub fn try_add(self, rhs: Value) -> Result<Value, ActionError> {
         use Value::*;
         match self {
-            Bool(a)=> match rhs{
-                Bool(b)=> Ok(Bool(a ||b)),
+            Bool(a) => match rhs {
+                Bool(b) => Ok(Bool(a || b)),
                 _ => Err(ActionError::new("Bool only adds to bool is OR op")),
-            }
+            },
             Num(a) => match rhs {
                 Num(b) => Ok(Num(a + b)),
                 _ => Err(ActionError::new("Cannot add non num to num")),
@@ -228,10 +228,10 @@ impl Value {
     pub fn try_mul(self, rhs: Value) -> Result<Value, ActionError> {
         println!("MUL");
         match self {
-            Value::Bool(a)=>match rhs{
+            Value::Bool(a) => match rhs {
                 Value::Bool(b) => Ok(Value::Bool(a && b)),
                 _ => Err(ActionError::new("Bool can only mul Bool as AND op")),
-            }
+            },
             Value::Num(a) => match rhs {
                 Value::Num(b) => Ok(Value::Num(a * b)),
                 _ => Err(ActionError::new("No mul on non num")),
@@ -264,16 +264,17 @@ impl From<String> for Value {
     }
 }
 
-
-impl PartialOrd for Value{
-    fn partial_cmp(&self,other:&Value)->Option<Ordering>{
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
         use Value::*;
-        match self{
+        match self {
             //TODO allow other comparisons
-            Num(a)=>if let Num(b) = other{
-                return a.partial_cmp(b)
+            Num(a) => {
+                if let Num(b) = other {
+                    return a.partial_cmp(b);
+                }
             }
-            _=>return None,
+            _ => return None,
         }
         None
     }
@@ -300,22 +301,23 @@ impl Value {
                 }
                 Ok(Value::Proto(res))
             }
-            Value::FuncCall(ref p,ref params)=>scope.call_func_const(p.clone(),params)?.ok_or(ActionError::new("func in expr returns no value")),
-            
+            Value::FuncCall(ref p, ref params) => scope
+                .call_func_const(p.clone(), params)?
+                .ok_or(ActionError::new("func in expr returns no value")),
+
             _ => Ok(self.clone()),
         }
     }
 
     pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
-        match it.next().as_ref().ok_or(it.eof())? {
-            Token::Ident(x) => {
-                if x == "ex" {
-                    let ex = Expr::from_tokens(it)?;
-                    return Ok(Value::FuncDef(Vec::new(), vec![Action::Expr(ex)]));
-                }
+        match it.next().ok_or(it.eof())? {
+            Token::Expr => {
+                let ex = Expr::from_tokens(it)?;
+                return Ok(Value::FuncDef(Vec::new(), vec![Action::Expr(ex)]));
             }
-            _ => it.back(),
+            Token::Fn => {}
+            e => return Err(it.err(&format!("Func def on notafunc {:?}",e))),
         }
         if it.next() != Some(Token::BOpen) {
             return Err(it.err("Func should start with '('"));
@@ -355,20 +357,24 @@ impl Value {
         match it.next() {
             None => Err(it.err("UX-EOF")),
             Some(Token::Qoth(s)) => Ok(Value::Str(s)),
-            Some(Token::True)=>Ok(Self::Bool(true)),
-            Some(Token::False)=>Ok(Self::Bool(false)),
+            Some(Token::True) => Ok(Self::Bool(true)),
+            Some(Token::False) => Ok(Self::Bool(false)),
             Some(Token::Num(n)) => Ok(Value::Num(n)),
-            Some(Token::Dollar)|Some(Token::Ident(_)) => {
+            Some(Token::Expr) | Some(Token::Fn) => {
+                it.back();
+                Self::func_def(it)
+            }
+            Some(Token::Dollar) | Some(Token::Ident(_)) => {
                 it.back();
                 let p = Proto::from_tokens(it);
-                match it.next(){
-                    Some(Token::BOpen)=>{
+                match it.next() {
+                    Some(Token::BOpen) => {
                         let mut params = Vec::new();
-                        while let Some(tk) = it.next(){
+                        while let Some(tk) = it.next() {
                             match tk {
-                                Token::BClose => return Ok(Value::FuncCall(p,params)),
-                                Token::Comma => {},
-                                _=>{
+                                Token::BClose => return Ok(Value::FuncCall(p, params)),
+                                Token::Comma => {}
+                                _ => {
                                     it.back();
                                     params.push(Expr::from_tokens(it)?);
                                 }
@@ -376,13 +382,12 @@ impl Value {
                         }
                         Err(it.eof())
                     }
-                    _=>{
+                    _ => {
                         it.back();
                         Ok(Value::Proto(p))
                     }
                 }
             }
-            Some(Token::Greater) => Ok(Value::func_def(it)?),
             Some(Token::SBOpen) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = it.next() {

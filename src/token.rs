@@ -5,6 +5,8 @@ use crate::prev_iter::{Backer, LineCounter, Prev};
 pub enum Token {
     Ident(String),
     Num(i32),
+    Expr,
+    Fn,
     Hash,
     Dot,
     Colon,
@@ -161,10 +163,12 @@ impl<'a> Iterator for Tokenizer<'a> {
             _ => {
                 self.it.back();
                 let id = self.read_ident();
-                match id.as_ref(){
-                    "true"=>Token::True,
-                    "false"=>Token::False,
-                    _=> Token::Ident(id),
+                match id.as_ref() {
+                    "true" => Token::True,
+                    "false" => Token::False,
+                    "expr" => Token::Expr,
+                    "fn" => Token::Fn,
+                    _ => Token::Ident(id),
                 }
             }
         };

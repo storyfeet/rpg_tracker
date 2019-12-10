@@ -1,15 +1,28 @@
+
+
+Attacks:
+.Stab=fn(atk,wpn,def)[
+    if(($atk.acc + d(6) > $def.evade), ($atk.str + $wpn.str -$def.def) ,0)
+]
+
+
+Knife:
+.attacks=[Stab,Slice]
+.str=expr(d(6)+2)
+
 Enemy:
 .Dam=0
 .HP=10
-.Health=>ex($*self.HP-$*self.Dam)
+.Health=expr($self.HP-$self.Dam)
 .Speed=4
 
-Rat = *Enemy
+Rat = $Enemy
 Rat:
 .HP=5
 .Speed=3
+.Weapons=[Knife]
 
-KingRat = *Enemy
+KingRat = $Enemy
 KingRat:
 .HP=10
 .Speed=4

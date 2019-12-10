@@ -11,14 +11,14 @@ Dagger:
 #This is a comment
 
 Player:
-    .print=>fn()[
+    .print=fn()[
         var.v.HP = $self.HP
         v.Health = self.Health()
         v
     ]
     .HP=10
     .Dam=0
-    .Health=>ex($self.HP - $self.Dam)
+    .Health=expr($self.HP - $self.Dam)
     .battle_view = [HP,Dam,Health]
 
 Bill = $Player
@@ -26,9 +26,9 @@ Bill:
     .HP+5
     .weapons=[Dagger,Fish]
     .Str=5
-    .Acc=>ex(d(3))
+    .Acc=expr(d(3))
     .Speed=23
-    .run=>fn(red)[
+    .run=fn(red)[
         $red.GP+4
         $red.GP
     ]

@@ -20,21 +20,25 @@ fn main() -> Result<(), failure::Error> {
         (about:"Track Dnd Info as it changes")
         (version:crate_version!())
         (author:"Matthew Stoodley")
-        (@arg file: -f +takes_value "Working Filename")
+        (@arg files: -f + takes_value ... "preloadfiles")
+        (@arg tracker: -t +takes_value "Working Filename")
     )
     .get_matches();
 
     let cfg = with_toml_env(&clp, &["/home/games/dnd.toml"]);
 
-    let fname = cfg.grab_local().arg("file").done();
+    let fname = cfg.grab_local().arg("tracker").done();
 
-    let mut scope = match fname {
-        Some(ref name) => Scope::from_file(name)?,
-        None => {
-            println!("No working file");
-            Scope::new()
+    let mut scope = Scope::new();
+    if let Some(it) = clp.values_of("files") {
+        for fv in it {
+            scope.run_file(fv)?;
         }
-    };
+    }
+
+    if let Some(ref name)= fname {
+        scope.run_file(name)?;
+    }
 
     loop {
         let mut input = String::new();
@@ -44,7 +48,7 @@ fn main() -> Result<(), failure::Error> {
         }
 
         for a in parse::ActionReader::new(&input) {
-            println!("--action--{:?}", a);
+            //println!("--action--{:?}", a);
             match a {
                 Ok(ac) => match scope.do_action(&ac.action) {
                     Ok(Some(v)) => {

@@ -35,3 +35,14 @@ pub fn load(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionErro
         }
     }
 }
+
+pub fn if_expr(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionError> {
+    if params.len() < 3 {
+        return Err(ActionError::new("if requires 3 params"));
+    }
+    match params[0].eval(sc) {
+        Ok(Value::Bool(true)) => params[1].eval(sc).map(|v| Some(v)),
+        Ok(Value::Num(n)) if n > 0 => params[1].eval(sc).map(|v| Some(v)),
+        _ => params[2].eval(sc).map(|v| Some(v)),
+    }
+}

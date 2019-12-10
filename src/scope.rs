@@ -38,13 +38,14 @@ impl Scope {
         self.data
     }
 
-    pub fn from_file<P: AsRef<Path>>(fname: P) -> Result<Self, ActionError> {
+    pub fn from_file<P: AsRef<Path>+Debug>(fname: P) -> Result<Self, ActionError> {
         let mut res = Scope::new();
         res.run_file(fname)?;
         Ok(res)
         
     }
-    pub fn run_file<P:AsRef<Path>>(&mut self,fname:P)->Result<(),ActionError> {
+    pub fn run_file<P:AsRef<Path>+Debug>(&mut self,fname:P)->Result<(),ActionError> {
+        println!("loading file : {:?}",fname);
         let fs = std::fs::read_to_string(&fname).map_err(|e|ActionError::new(&e.to_string()))?;
         let r = ActionReader::new(&fs);
 
@@ -120,6 +121,7 @@ impl Scope {
         match proto.pp().next().unwrap_or("") {
             "d" => return api_funcs::d(self,params),
             "load"=> return api_funcs::load(self,params),
+            "if"=>return api_funcs::if_expr(self,params),
             _ => {}
         }
 
