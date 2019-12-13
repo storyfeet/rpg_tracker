@@ -16,6 +16,7 @@ pub enum Expr {
     Mul(Box<Expr>, Box<Expr>),
     Less(Box<Expr>, Box<Expr>),
     Greater(Box<Expr>, Box<Expr>),
+    Equal(Box<Expr>, Box<Expr>),
     And(Box<Expr>, Box<Expr>),
     Or(Box<Expr>, Box<Expr>),
     Neg(Box<Expr>),
@@ -51,9 +52,7 @@ impl Expr {
             Neg(a) => a.eval(scope)?.try_neg()?,
             Greater(a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Less(a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
-            /*       CallFunc(nm, params) => scope
-            .call_func_const(nm.clone(), params)?
-            .ok_or(ActionError::new("func in expression returns no value"))?,*/
+            Equal(a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
             _ => Value::Num(0),
         })
     }
@@ -82,23 +81,30 @@ impl Expr {
         }
         //only get here if Bracket Open '('
         let mut parts = Vec::new();
+        let mut is_first = true;
         while let Some(t) = it.next() {
             match t {
                 Token::Break | Token::BClose => break,
                 Token::BOpen => parts.push(Self::from_tokens(it)?),
                 Token::Add
-                | Token::Sub
                 | Token::Mul
                 | Token::Div
                 | Token::Greater
                 | Token::Less
-                | Token::Amp
-                | Token::Or => parts.push(Expr::Op(t)),
+                | Token::Equals
+                => parts.push(Expr::Op(t)),
+                Token::Sub =>
+                    if is_first{
+                        parts.push(Expr::Neg(Box::new(Expr::from_tokens(it)?)));
+                    } else{
+                        parts.push(Expr::Op(Token::Sub));
+                    }
                 _ => {
                     it.back();
                     parts.push(Expr::from_tokens(it)?);
                 }
             }
+            is_first = false;
         }
 
         let p = parts;
@@ -110,8 +116,9 @@ impl Expr {
             Expr::Greater(Box::new(a), Box::new(b))
         })?;
         let p = Self::split_op(p, Token::Less, |a, b| Expr::Less(Box::new(a), Box::new(b)))?;
-        let p = Self::split_op(p, Token::Amp, |a, b| Expr::And(Box::new(a), Box::new(b)))?;
-        let p = Self::split_op(p, Token::Or, |a, b| Expr::Or(Box::new(a), Box::new(b)))?;
+        let p = Self::split_op(p, Token::Equals, |a, b| {
+            Expr::Equal(Box::new(a), Box::new(b))
+        })?;
 
         Ok(p[0].clone())
     }
