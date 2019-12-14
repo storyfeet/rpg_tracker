@@ -6,6 +6,7 @@ mod parse;
 mod prev_iter;
 mod proto;
 mod scope;
+mod screen;
 mod token;
 mod value;
 
@@ -36,9 +37,13 @@ fn main() -> Result<(), failure::Error> {
         }
     }
 
-    if let Some(ref name)= fname {
+    if let Some(ref name) = fname {
         scope.run_file(name)?;
     }
+
+    screen::run_screen(scope).map_err(|e| e.into())
+
+    /*
 
     loop {
         let mut input = String::new();
@@ -68,6 +73,7 @@ fn main() -> Result<(), failure::Error> {
             }
         }
     }
+    */
 }
 
 pub fn write_action<P: AsRef<Path>>(fname: &Option<P>, s: &str) -> std::io::Result<()> {
