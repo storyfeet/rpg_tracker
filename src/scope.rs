@@ -224,13 +224,6 @@ impl Scope {
             ActionError::new(s)
         };
         match a {
-            Action::Show(proto) => {
-                let np = self.in_context(&proto)?;
-                match self.get_pp(np.pp()) {
-                    Some(v) => println!("{}", v.print(0)),
-                    None => println!("Empty"),
-                }
-            }
             Action::Select(proto_op) => {
                 if let Some(proto) = proto_op {
                     let np = self.in_context(&proto)?;

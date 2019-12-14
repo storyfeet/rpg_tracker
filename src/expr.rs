@@ -1,6 +1,7 @@
 use crate::error::{ActionError, LineError};
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
+use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
@@ -38,6 +39,9 @@ impl Expr {
     }
     pub fn neg(e: Expr) -> Self {
         Expr::Neg(Box::new(e))
+    }
+    pub fn proto(p: Proto) -> Self {
+        Expr::Val(Value::Proto(p))
     }
 
     pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
@@ -91,14 +95,14 @@ impl Expr {
                 | Token::Div
                 | Token::Greater
                 | Token::Less
-                | Token::Equals
-                => parts.push(Expr::Op(t)),
-                Token::Sub =>
-                    if is_first{
+                | Token::Equals => parts.push(Expr::Op(t)),
+                Token::Sub => {
+                    if is_first {
                         parts.push(Expr::Neg(Box::new(Expr::from_tokens(it)?)));
-                    } else{
+                    } else {
                         parts.push(Expr::Op(Token::Sub));
                     }
+                }
                 _ => {
                     it.back();
                     parts.push(Expr::from_tokens(it)?);

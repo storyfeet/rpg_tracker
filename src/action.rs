@@ -6,7 +6,6 @@ use crate::token::{TokPrev, Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    Show(Proto),
     Select(Option<Proto>),
     Add(Proto, Expr),
     Sub(Proto, Expr),
@@ -39,7 +38,7 @@ impl Action {
 
     pub fn from_proto(p: Proto, t: &mut TokPrev) -> Result<Action, LineError> {
         match t.next() {
-            None | Some(Token::Break) => Ok(Action::Show(p)),
+            None | Some(Token::Break) => Ok(Action::Expr(Expr::proto(p.with_deref(1)))),
             Some(Token::Colon) => Ok(Action::Select(Some(p))),
             Some(Token::Equals) => Ok(Action::Set(p, Expr::from_tokens(t)?)),
             Some(Token::Add) => Ok(Action::Add(p, Expr::from_tokens(t)?)),
@@ -88,7 +87,7 @@ impl Action {
     //if the function should be added to the
     pub fn is_fileworthy(&self) -> bool {
         match self {
-            Action::Show(_) | Action::Expr(_) => false,
+            Action::Expr(_) => false,
             _ => true,
         }
     }
