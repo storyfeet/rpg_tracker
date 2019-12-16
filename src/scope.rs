@@ -1,4 +1,5 @@
 use crate::action::Action;
+use crate::api_funcs;
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::parse::ActionReader;
@@ -6,7 +7,6 @@ use crate::proto::{Proto, ProtoP};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 use std::path::Path;
-use crate::api_funcs;
 
 //unsafe invariant that must be maintained:
 //rescoped Scopes can only be used for immediate function calls
@@ -34,21 +34,19 @@ impl Scope {
         }
     }
 
-    pub fn eat_data(self)->Value{
+    pub fn eat_data(self) -> Value {
         self.data
     }
 
-    pub fn from_file<P: AsRef<Path>+Debug>(fname: P) -> Result<Self, ActionError> {
+    pub fn from_file<P: AsRef<Path> + Debug>(fname: P) -> Result<Self, ActionError> {
         let mut res = Scope::new();
         res.run_file(fname)?;
         Ok(res)
-        
     }
-    pub fn run_file<P:AsRef<Path>+Debug>(&mut self,fname:P)->Result<(),ActionError> {
-        println!("loading file : {:?}",fname);
-        let fs = std::fs::read_to_string(&fname).map_err(|e|ActionError::new(&e.to_string()))?;
+    pub fn run_file<P: AsRef<Path> + Debug>(&mut self, fname: P) -> Result<(), ActionError> {
+        println!("loading file : {:?}", fname);
+        let fs = std::fs::read_to_string(&fname).map_err(|e| ActionError::new(&e.to_string()))?;
         let r = ActionReader::new(&fs);
-
 
         for a in r {
             //        println!(" -- {:?}", a);
@@ -119,15 +117,25 @@ impl Scope {
 
     fn run_func(&mut self, proto: Proto, params: &[Expr]) -> Result<Option<Value>, ActionError> {
         match proto.pp().next().unwrap_or("") {
-            "d" => return api_funcs::d(self,params),
-            "load"=> return api_funcs::load(self,params),
-            "if"=>return api_funcs::if_expr(self,params),
+            "d" => return api_funcs::d(self, params),
+            "load" => return api_funcs::load(self, params),
+            "if" => return api_funcs::if_expr(self, params),
             _ => {}
         }
 
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
-        let (pnames, actions) = match self.get_pp(np.pp()) {
+
+        if nparent.pp().next() != Some("self") {
+            self.set_param("self", Value::Proto(nparent));
+        }
+
+        let ld2 = {
+            let ld = self.get_pp(np.pp());
+            ld.clone()
+        };
+        let (pnames, actions) = match ld2 {
+            Some(Value::ExprDef(ex)) => return self.do_action(&Action::Expr(*ex.clone())),
             Some(Value::FuncDef(pn, ac)) => (pn.clone(), ac.clone()),
             _ => return Err(ActionError::new("func on notafunc")),
         };
@@ -137,9 +145,6 @@ impl Scope {
                 let v = params[p].eval(self)?;
                 self.set_param(&pnames[p], v);
             }
-        }
-        if nparent.pp().next() != Some("self") {
-            self.set_param("self", Value::Proto(nparent));
         }
 
         for a in &actions {

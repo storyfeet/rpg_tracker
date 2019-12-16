@@ -17,6 +17,7 @@ pub enum Value {
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
     Proto(Proto),
+    ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
     FuncCall(Proto, Vec<Expr>),
 }
@@ -66,6 +67,9 @@ impl Value {
             }
             Proto(p) => {
                 res.push_str(&p.to_string());
+            }
+            ExprDef(ex) => {
+                res.push_str(&ex.print());
             }
             FuncDef(params, _) => {
                 res.push_str(&format!("func{:?}", params));
@@ -314,10 +318,10 @@ impl Value {
         match it.next().ok_or(it.eof())? {
             Token::Expr => {
                 let ex = Expr::from_tokens(it)?;
-                return Ok(Value::FuncDef(Vec::new(), vec![Action::Expr(ex)]));
+                return Ok(Value::ExprDef(Box::new(ex)));
             }
             Token::Fn => {}
-            e => return Err(it.err(&format!("Func def on notafunc {:?}",e))),
+            e => return Err(it.err(&format!("Func def on notafunc {:?}", e))),
         }
         if it.next() != Some(Token::BOpen) {
             return Err(it.err("Func should start with '('"));
