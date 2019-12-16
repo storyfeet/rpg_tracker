@@ -130,13 +130,13 @@ impl Scope {
             self.set_param("self", Value::Proto(nparent));
         }
 
-        let ld2 = {
-            let ld = self.get_pp(np.pp());
-            ld.clone()
-        };
-        let (pnames, actions) = match ld2 {
-            Some(Value::ExprDef(ex)) => return self.do_action(&Action::Expr(*ex.clone())),
-            Some(Value::FuncDef(pn, ac)) => (pn.clone(), ac.clone()),
+        let f_load = self
+            .get_pp(np.pp())
+            .ok_or(ActionError::new("nothing at funcname"))?
+            .clone();
+        let (pnames, actions) = match f_load {
+            Value::ExprDef(ex) => return self.do_action(&Action::Expr(*ex)),
+            Value::FuncDef(pn, ac) => (pn, ac),
             _ => return Err(ActionError::new("func on notafunc")),
         };
 
