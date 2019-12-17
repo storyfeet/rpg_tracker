@@ -1,5 +1,5 @@
-use crate::prev_iter::{Backer};
-use crate::token::{Token, TokPrev};
+use crate::prev_iter::Backer;
+use crate::token::{TokPrev, Token};
 use std::fmt::{Display, Formatter};
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
@@ -10,7 +10,6 @@ pub struct Proto {
 
 impl Display for Proto {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-
         for _ in 0..self.derefs {
             write!(f, "$")?;
         }
@@ -60,7 +59,12 @@ impl Proto {
         res
     }
 
-    pub fn from_tokens(t:&mut TokPrev) -> Self {
+    pub fn from_str(s: &str) -> Self {
+        let mut tp = TokPrev::new(s);
+        Self::from_tokens(&mut tp)
+    }
+
+    pub fn from_tokens(t: &mut TokPrev) -> Self {
         let mut res = Proto::empty(0);
         while let Some(v) = t.next() {
             match v {

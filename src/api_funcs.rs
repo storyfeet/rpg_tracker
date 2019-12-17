@@ -3,6 +3,9 @@ use crate::expr::Expr;
 use crate::scope::Scope;
 use crate::value::Value;
 
+
+
+
 pub fn d(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionError> {
     let p1 = params.get(0).ok_or(ActionError::new("d needs num sides"))?;
     let v = p1.eval(sc)?;
@@ -45,4 +48,24 @@ pub fn if_expr(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionE
         Ok(Value::Num(n)) if n > 0 => params[1].eval(sc).map(|v| Some(v)),
         _ => params[2].eval(sc).map(|v| Some(v)),
     }
+}
+
+
+/// final function should take (k,v) as params
+pub fn for_each(sc:&mut Scope, params:&[Expr])->Result<Option<Value>,ActionError>{
+    if params.len() <= 1 {
+        return Err(ActionError::new("Foreach requires at least 2 params"));
+    }
+    if params.len() == 2{
+        if let Expr::Val(ref func) = params[1]{
+            match params[0]{
+                Expr::Val(Value::List(ref l))=>return sc.for_each(l.clone().into_iter().enumerate(),func.clone()),
+                _=>return Err(ActionError::new("Must be list for iterator right now")),
+                
+            }
+        }
+    }
+
+    Ok(None)
+
 }
