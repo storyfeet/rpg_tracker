@@ -23,6 +23,7 @@ fn main() -> Result<(), failure::Error> {
         (author:"Matthew Stoodley")
         (@arg files: -f + takes_value ... "preloadfiles")
         (@arg tracker: -t +takes_value "Working Filename")
+        (@arg nogui: -n "No Gui")
     )
     .get_matches();
 
@@ -41,9 +42,9 @@ fn main() -> Result<(), failure::Error> {
         scope.run_file(name)?;
     }
 
-    screen::run_screen(scope).map_err(|e| e.into())
-
-    /*
+    if !clp.is_present("nogui") {
+        return screen::run_screen(scope).map_err(|e| e.into());
+    }
 
     loop {
         let mut input = String::new();
@@ -73,7 +74,6 @@ fn main() -> Result<(), failure::Error> {
             }
         }
     }
-    */
 }
 
 pub fn write_action<P: AsRef<Path>>(fname: &Option<P>, s: &str) -> std::io::Result<()> {

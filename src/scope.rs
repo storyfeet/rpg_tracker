@@ -124,47 +124,51 @@ impl Scope {
         &mut self,
         it: IT,
         func: Value,
-    ) -> Result<Option<Value>, ActionError> { 
-        let actions = match func{
-            Value::FuncDef(_,actions)=>actions,
+    ) -> Result<Option<Value>, ActionError> {
+        println!("foreach");
+        let actions = match func {
+            Value::FuncDef(_, actions) =>{
+                println!("foreach has func {:?}",actions);
+                actions
+            }
             _ => return Err(ActionError::new("foreach requires a func def")),
         };
+        println!("Foreach Actions = {:?}",actions);
         let mut scope = Scope {
             base: None,
             data: Value::tree(),
             parent: Parent::Mut(self as *mut Scope),
         };
-        
+
         for (k, v) in it {
-            scope.set_param("k",Value::Num(k as i32));
-            scope.set_param("v",v);
+            scope.set_param("k", Value::Num(k as i32));
+            scope.set_param("v", v);
 
             for a in &actions {
                 let done = self.do_action(a);
+                println!("foreach Done = {:?}",done);
                 match done {
                     Ok(Some(v)) => {
                         //set res to fold result
-                        match scope.get_pp(Proto::from_str("var.res")){
-                            Some(old)=>v.try_add()
-
-                        }
-
-                        scope.set_param("res")
-                        continue
+                        let nv = match scope.get_pp(Proto::from_str("var.res").pp()) {
+                            Some(old) => old.clone().try_add(v)?,
+                            None => v,
+                        };
+                        scope.set_param("res", nv);
+                        break;
                     }
                     Err(e) => return Err(e),
                     Ok(None) => {}
                 }
             }
-
         }
-        Ok(scope.get_pp(Proto::one("res",0).pp()).map(|v|v.clone()))
+        Ok(scope.get_pp(Proto::one("res", 0).pp()).map(|v| v.clone()))
     }
 
     fn run_func(&mut self, proto: Proto, params: &[Expr]) -> Result<Option<Value>, ActionError> {
         match proto.pp().next().unwrap_or("") {
             "d" => return api_funcs::d(self, params),
-            "foreach" => return api_funcs::for_each(self,params),
+            "foreach" => return api_funcs::for_each(self, params),
             "load" => return api_funcs::load(self, params),
             "if" => return api_funcs::if_expr(self, params),
             _ => {}
