@@ -315,6 +315,7 @@ impl Value {
 
     pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
+        println!("Func def");
         match it.next().ok_or(it.eof())? {
             Token::Expr => {
                 let ex = Expr::from_tokens(it)?;
@@ -323,7 +324,7 @@ impl Value {
             Token::Fn => {}
             e => return Err(it.err(&format!("Func def on notafunc {:?}", e))),
         }
-        if it.next() != Some(Token::BOpen) {
+        if it.next() != Some(Token::BracketO) {
             return Err(it.err("Func should start with '('"));
         }
 
@@ -333,12 +334,12 @@ impl Value {
             match tk {
                 Token::Ident(s) => params.push(s),
                 Token::Comma | Token::Break => {}
-                Token::BClose => break,
+                Token::BracketC => break,
                 e => return Err(it.err(&format!("Ux {:?} in func params", e))),
             }
         }
 
-        if it.next() != Some(Token::SBOpen) {
+        if it.next() != Some(Token::SquigleO) {
             return Err(it.err("Func has nothing to do"));
         }
 
@@ -346,7 +347,7 @@ impl Value {
         //loop actions
         while let Some(tk) = it.next() {
             match tk {
-                Token::SBClose => break,
+                Token::SquigleC => break,
                 Token::Comma | Token::Break => {}
                 _ => {
                     it.back();
@@ -372,11 +373,11 @@ impl Value {
                 it.back();
                 let p = Proto::from_tokens(it);
                 match it.next() {
-                    Some(Token::BOpen) => {
+                    Some(Token::BracketO) => {
                         let mut params = Vec::new();
                         while let Some(tk) = it.next() {
                             match tk {
-                                Token::BClose => return Ok(Value::FuncCall(p, params)),
+                                Token::BracketC => return Ok(Value::FuncCall(p, params)),
                                 Token::Comma => {}
                                 _ => {
                                     it.back();
@@ -392,12 +393,12 @@ impl Value {
                     }
                 }
             }
-            Some(Token::SBOpen) => {
+            Some(Token::SquareO) => {
                 let mut rlist = Vec::new();
                 while let Some(v) = it.next() {
                     match v {
                         Token::Comma | Token::Break => {}
-                        Token::SBClose => return Ok(Value::List(rlist)),
+                        Token::SquareC => return Ok(Value::List(rlist)),
 
                         _ => {
                             it.back();

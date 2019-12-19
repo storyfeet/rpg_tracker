@@ -49,6 +49,7 @@ pub fn if_expr(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionE
 
 /// final function should take (k,v) as params
 pub fn for_each(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, ActionError> {
+    println!("api_foreach");
     if params.len() <= 1 {
         return Err(ActionError::new("Foreach requires at least 2 params"));
     }
@@ -63,6 +64,7 @@ pub fn for_each(sc: &mut Scope, params: &[Expr]) -> Result<Option<Value>, Action
             }
         }
     }
+    println!("Paramlen = {}: {:?}", params.len(), params);
 
     Ok(None)
 }

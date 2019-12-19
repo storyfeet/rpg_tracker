@@ -76,7 +76,7 @@ impl Expr {
 
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         match it.next().ok_or(it.eof())? {
-            Token::BOpen => {} // pass on to expr list
+            Token::BracketO => {} // pass on to expr list
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
             _ => {
                 it.back();
@@ -88,8 +88,8 @@ impl Expr {
         let mut is_first = true;
         while let Some(t) = it.next() {
             match t {
-                Token::Break | Token::BClose => break,
-                Token::BOpen => parts.push(Self::from_tokens(it)?),
+                Token::Break | Token::BracketC => break,
+                Token::BracketO => parts.push(Self::from_tokens(it)?),
                 Token::Add
                 | Token::Mul
                 | Token::Div

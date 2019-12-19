@@ -43,12 +43,12 @@ impl Action {
             Some(Token::Equals) => Ok(Action::Set(p, Expr::from_tokens(t)?)),
             Some(Token::Add) => Ok(Action::Add(p, Expr::from_tokens(t)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Expr::from_tokens(t)?)),
-            Some(Token::BOpen) => {
+            Some(Token::BracketO) => {
                 let mut params = Vec::new();
                 while let Some(tk) = t.next() {
                     match tk {
                         Token::Comma => {}
-                        Token::BClose => return Ok(Action::CallFunc(p, params)),
+                        Token::BracketC => return Ok(Action::CallFunc(p, params)),
                         _ => {
                             t.back();
                             params.push(Expr::from_tokens(t)?);
