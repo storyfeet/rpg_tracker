@@ -97,7 +97,7 @@ impl Scope {
     pub fn call_func_const(
         &self,
         proto: Proto,
-        params: &[Expr],
+        params: &[Value], //resolve expressions before calling func
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -110,7 +110,7 @@ impl Scope {
     pub fn call_func_mut(
         &mut self,
         proto: Proto,
-        params: &[Expr],
+        params: &[Value],
     ) -> Result<Option<Value>, ActionError> {
         let mut wrap = Scope {
             base: None,
@@ -165,7 +165,7 @@ impl Scope {
         Ok(scope.get_pp(Proto::one("res", 0).pp()).map(|v| v.clone()))
     }
 
-    fn run_func(&mut self, proto: Proto, params: &[Expr]) -> Result<Option<Value>, ActionError> {
+    fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
         match proto.pp().next().unwrap_or("") {
             "d" => return api_funcs::d(self, params),
             "foreach" => return api_funcs::for_each(self, params),
@@ -193,8 +193,7 @@ impl Scope {
 
         for p in 0..params.len() {
             if pnames.len() > p {
-                let v = params[p].eval(self)?;
-                self.set_param(&pnames[p], v);
+                self.set_param(&pnames[p], params[p].clone());
             }
         }
 
@@ -328,7 +327,11 @@ impl Scope {
             }
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
-                return self.call_func_mut(proto.clone(), &params);
+                let mut nparams = Vec::new();
+                for p in params{
+                    nparams.push(p.eval(&self)?);
+                }
+                return self.call_func_mut(proto.clone(), &nparams);
             }
         };
         Ok(None)

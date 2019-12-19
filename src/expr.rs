@@ -76,7 +76,7 @@ impl Expr {
 
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         match it.next().ok_or(it.eof())? {
-            Token::BracketO => {} // pass on to expr list
+            Token::BracketO => {} // pass on to expr sum
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
             _ => {
                 it.back();

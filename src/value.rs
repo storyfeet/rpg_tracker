@@ -305,9 +305,15 @@ impl Value {
                 }
                 Ok(Value::Proto(res))
             }
-            Value::FuncCall(ref p, ref params) => scope
-                .call_func_const(p.clone(), params)?
-                .ok_or(ActionError::new("func in expr returns no value")),
+            Value::FuncCall(ref p, ref params) =>{ 
+                let mut nparams = Vec::new();
+                for p in params{
+                    nparams.push(p.eval(scope)?);
+                }
+                scope
+                .call_func_const(p.clone(), &nparams)?
+                .ok_or(ActionError::new("func in expr returns no value"))
+                }
 
             _ => Ok(self.clone()),
         }
