@@ -3,9 +3,20 @@ use crate::scope::Scope;
 use crate::value::Value;
 
 pub fn d(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
-    match params[0] {
-        Value::Num(n) => Ok(Some(Value::Num((rand::random::<i32>().abs() % n) + 1))),
-        _ => Err(ActionError::new("d needs num sides")),
+    let mut res = 0;
+    for p in params {
+        match p {
+            Value::Num(n) => res += rand::random::<i32>().abs() % n + 1,
+            _ => return Err(ActionError::new("d needs num sides")),
+        }
+    }
+    Ok(Some(Value::Num(res)))
+}
+
+pub fn link(_sc: &mut Scope,params:&[Value])->Result<Option<Value>,ActionError>{
+    match params.get(0){
+        Some(Value::Proto(p))=>Ok(Some(Value::Proto(p.with_deref(1)))),
+        _ => Err(ActionError::new("can only link on protos")),
     }
 }
 

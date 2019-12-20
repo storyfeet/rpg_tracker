@@ -159,6 +159,7 @@ impl Scope {
             "d" => return api_funcs::d(self, params),
             "foreach" => return api_funcs::for_each(self, params),
             "load" => return api_funcs::load(self, params),
+            "link" => return api_funcs::link(self, params),
             "if" => return api_funcs::if_expr(self, params),
             _ => {}
         }
@@ -238,7 +239,8 @@ impl Scope {
     }
 
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
-        let mut res = match p.dots {
+        //println!("in context p = {}",p);
+        let res = match p.dots {
             0 => p.clone(),
             _ => match self.base.as_ref() {
                 Some(b) => b.extend_new(p.pp()),
@@ -253,12 +255,15 @@ impl Scope {
                 },
             },
         };
-        let dcount = res.derefs;
-        for _ in 0..dcount {
-            if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
-                res = der.clone();
-            }
+       // println!("in context res = {}",p);
+        if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
+            return match res.derefs + der.derefs{
+                0 =>Ok(res),
+                1 =>Ok(der.clone()),
+                n => self.in_context(&der.with_set_deref(n-1)),
+            };
         }
+        
         Ok(res)
     }
 

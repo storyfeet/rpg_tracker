@@ -115,6 +115,12 @@ impl Proto {
         res.derefs += n;
         res
     }
+
+    pub fn with_set_deref(&self, n: i32) -> Proto {
+        let mut res = self.clone();
+        res.derefs = n;
+        res
+    }
 }
 
 #[derive(Clone, Debug)]

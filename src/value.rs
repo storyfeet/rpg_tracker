@@ -286,22 +286,27 @@ impl Value {
     pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
         match self {
             Value::Proto(ref p) => {
-                let mut res = p.clone();
-                let dc = p.derefs;
-                for i in 0..dc {
-                    match scope.get_pp(res.pp()) {
-                        Some(Value::Proto(np)) => res = np.clone(),
-                        Some(v) => {
-                            if i + 1 == dc {
-                                return Ok(v.clone());
-                            } else {
-                                return Err(ActionError::new("deref beyond protos"));
-                            }
+                match scope.get_pp(p.pp()) {
+                    Some(Value::Proto(np)) =>{
+                        match p.derefs + np.derefs {
+                            0 => Ok(self.clone()),
+                            1=> Ok(Value::Proto(np.clone())),
+                            n => Value::Proto(np.with_set_deref(n-1)).resolve_path(scope),
+
                         }
-                        None => return Err(ActionError::new("deref to nothing")),
+                    }
+                    Some(v)=>{
+                        if p.derefs == 0 {
+                            Ok(self.clone())
+                        }else {
+                            Ok(v.clone())
+                        }
+
+                    }
+                    None => {
+                        Ok(self.clone())
                     }
                 }
-                Ok(Value::Proto(res))
             }
             Value::FuncCall(ref p, ref params) => {
                 let mut nparams = Vec::new();
