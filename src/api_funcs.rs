@@ -44,12 +44,10 @@ pub fn if_expr(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, Actio
 
 /// final function should take (k,v) as params
 pub fn for_each(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
-    println!("api_foreach");
     if params.len() <= 1 {
         return Err(ActionError::new("Foreach requires at least 2 params"));
     }
     if params.len() == 2 {
-        println!("2 params");
         match params[0] {
             Value::List(ref l) => {
                 return sc.for_each(l.clone().into_iter().enumerate(), params[1].clone())
@@ -57,7 +55,6 @@ pub fn for_each(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, Actio
             _ => return Err(ActionError::new("Must be list for iterator right now")),
         }
     }
-    println!("Paramlen = {}: {:?}", params.len(), params);
 
     Ok(None)
 }

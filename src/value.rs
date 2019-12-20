@@ -102,7 +102,6 @@ impl Value {
     }
 
     pub fn get_path<'a>(&'a self, pp: &mut ProtoP) -> Option<&'a Value> {
-        //println!("value::get_path({:?},{:?})", self, pp);
         if let Value::Proto(_) = self {
             return Some(self);
         };
@@ -216,7 +215,7 @@ impl Value {
             Str(_) => Err(ActionError::new("Cannot subtract from string")),
             List(a) => match rhs {
                 List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
-                _ => Err(ActionError::new("Cannot subtract non list from List")),
+                v => Ok(List(a.into_iter().filter(|x| *x != v).collect())), 
             },
             Tree(mut t) => match rhs {
                 Str(s) => {
@@ -230,7 +229,6 @@ impl Value {
     }
 
     pub fn try_mul(self, rhs: Value) -> Result<Value, ActionError> {
-        println!("MUL");
         match self {
             Value::Bool(a) => match rhs {
                 Value::Bool(b) => Ok(Value::Bool(a && b)),
@@ -305,15 +303,15 @@ impl Value {
                 }
                 Ok(Value::Proto(res))
             }
-            Value::FuncCall(ref p, ref params) =>{ 
+            Value::FuncCall(ref p, ref params) => {
                 let mut nparams = Vec::new();
-                for p in params{
+                for p in params {
                     nparams.push(p.eval(scope)?);
                 }
                 scope
-                .call_func_const(p.clone(), &nparams)?
-                .ok_or(ActionError::new("func in expr returns no value"))
-                }
+                    .call_func_const(p.clone(), &nparams)?
+                    .ok_or(ActionError::new("func in expr returns no value"))
+            }
 
             _ => Ok(self.clone()),
         }
@@ -321,7 +319,6 @@ impl Value {
 
     pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
-        println!("Func def");
         match it.next().ok_or(it.eof())? {
             Token::Expr => {
                 let ex = Expr::from_tokens(it)?;

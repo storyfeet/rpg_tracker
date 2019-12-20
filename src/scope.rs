@@ -44,17 +44,12 @@ impl Scope {
         Ok(res)
     }
     pub fn run_file<P: AsRef<Path> + Debug>(&mut self, fname: P) -> Result<(), ActionError> {
-        println!("loading file : {:?}", fname);
         let fs = std::fs::read_to_string(&fname).map_err(|e| ActionError::new(&e.to_string()))?;
         let r = ActionReader::new(&fs);
 
         for a in r {
-            //        println!(" -- {:?}", a);
             let a = match a {
-                Ok(v) => {
-                    //                println!(" OK {:?}", v);
-                    v
-                }
+                Ok(v) => v,
                 Err(e) => {
                     println!("Error {}", e);
                     continue;
@@ -125,15 +120,10 @@ impl Scope {
         it: IT,
         func: Value,
     ) -> Result<Option<Value>, ActionError> {
-        println!("foreach");
         let actions = match func {
-            Value::FuncDef(_, actions) =>{
-                println!("foreach has func {:?}",actions);
-                actions
-            }
+            Value::FuncDef(_, actions) => actions,
             _ => return Err(ActionError::new("foreach requires a func def")),
         };
-        println!("Foreach Actions = {:?}",actions);
         let mut scope = Scope {
             base: None,
             data: Value::tree(),
@@ -145,8 +135,7 @@ impl Scope {
             scope.set_param("v", v);
 
             for a in &actions {
-                let done = self.do_action(a);
-                println!("foreach Done = {:?}",done);
+                let done = scope.do_action(a);
                 match done {
                     Ok(Some(v)) => {
                         //set res to fold result
@@ -266,7 +255,6 @@ impl Scope {
         };
         let dcount = res.derefs;
         for _ in 0..dcount {
-            //println!("dereffing");
             if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
                 res = der.clone();
             }
@@ -328,7 +316,7 @@ impl Scope {
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::CallFunc(proto, params) => {
                 let mut nparams = Vec::new();
-                for p in params{
+                for p in params {
                     nparams.push(p.eval(&self)?);
                 }
                 return self.call_func_mut(proto.clone(), &nparams);

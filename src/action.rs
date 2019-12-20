@@ -57,7 +57,11 @@ impl Action {
                 }
                 return Err(t.eof());
             }
-            e => Err(t.ux(e, "after ident")),
+            _ => {
+                t.back();
+                Ok(Action::Expr(Expr::proto(p)))
+            }
+            //e => Err(t.ux(e, "after ident")),
         }
     }
 

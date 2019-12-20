@@ -171,7 +171,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                     "true" => Token::True,
                     "false" => Token::False,
                     "expr" => Token::Expr,
-                    "fn" => Token::Fn,
+                    "fn" | "func" => Token::Fn,
                     _ => Token::Ident(id),
                 }
             }
