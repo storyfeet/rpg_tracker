@@ -78,7 +78,8 @@ impl Proto {
                         res.derefs += 1
                     }
                 }
-                Token::Qoth(s) | Token::Ident(s) => res.push(&s),
+                Token::Qoth(s) | Token::Ident(s) => res.v.push(s),
+                Token::Num(n) => res.v.push(n.to_string()),
                 _ => {
                     t.back();
                     return res;

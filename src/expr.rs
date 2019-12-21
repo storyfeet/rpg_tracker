@@ -22,6 +22,7 @@ pub enum Expr {
     Or(Box<Expr>, Box<Expr>),
     Neg(Box<Expr>),
     Op(Token),
+    List(Vec<Expr>),
 }
 
 impl FromStr for Expr {
@@ -57,6 +58,13 @@ impl Expr {
             Greater(a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Less(a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
             Equal(a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
+            List(l) => {
+                let mut vl = Vec::new();
+                for e in l {
+                    vl.push(e.eval(scope)?);
+                }
+                Value::List(vl)
+            }
             _ => Value::Num(0),
         })
     }
@@ -77,6 +85,20 @@ impl Expr {
     pub fn from_tokens(it: &mut TokPrev) -> Result<Expr, LineError> {
         match it.next().ok_or(it.eof())? {
             Token::BracketO => {} // pass on to expr sum
+            Token::SquareO => {
+                let mut parts = Vec::new();
+                while let Some(t) = it.next() {
+                    match t {
+                        Token::Break | Token::Comma => {}
+                        Token::SquareC => return Ok(Expr::List(parts)),
+                        _ => {
+                            it.back();
+                            parts.push(Expr::from_tokens(it)?);
+                        }
+                    }
+                }
+                return Err(it.eof());
+            }
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
             _ => {
                 it.back();
@@ -162,7 +184,7 @@ mod test_expr {
     use super::*;
     #[test]
     fn test_expr_results() {
-        let r: Expr = "5 +2".parse().unwrap();
+        let r: Expr = "5 + 2".parse().unwrap();
         assert_eq!(r.eval(), 7);
 
         let r: Expr = "5 +2 *2".parse().unwrap();

@@ -112,6 +112,13 @@ impl Value {
                     Some(ch) => return ch.get_path(pp),
                     None => None,
                 },
+                Value::List(l) => {
+                    let n = p.parse::<usize>().ok()?;
+                    match l.get(n) {
+                        Some(ch) => return ch.get_path(pp),
+                        None => None,
+                    }
+                }
                 _ => None,
             },
         }
@@ -215,7 +222,7 @@ impl Value {
             Str(_) => Err(ActionError::new("Cannot subtract from string")),
             List(a) => match rhs {
                 List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
-                v => Ok(List(a.into_iter().filter(|x| *x != v).collect())), 
+                v => Ok(List(a.into_iter().filter(|x| *x != v).collect())),
             },
             Tree(mut t) => match rhs {
                 Str(s) => {
@@ -285,29 +292,21 @@ impl PartialOrd for Value {
 impl Value {
     pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
         match self {
-            Value::Proto(ref p) => {
-                match scope.get_pp(p.pp()) {
-                    Some(Value::Proto(np)) =>{
-                        match p.derefs + np.derefs {
-                            0 => Ok(self.clone()),
-                            1=> Ok(Value::Proto(np.clone())),
-                            n => Value::Proto(np.with_set_deref(n-1)).resolve_path(scope),
-
-                        }
-                    }
-                    Some(v)=>{
-                        if p.derefs == 0 {
-                            Ok(self.clone())
-                        }else {
-                            Ok(v.clone())
-                        }
-
-                    }
-                    None => {
+            Value::Proto(ref p) => match scope.get_pp(p.pp()) {
+                Some(Value::Proto(np)) => match p.derefs + np.derefs {
+                    0 => Ok(self.clone()),
+                    1 => Ok(Value::Proto(np.clone())),
+                    n => Value::Proto(np.with_set_deref(n - 1)).resolve_path(scope),
+                },
+                Some(v) => {
+                    if p.derefs == 0 {
                         Ok(self.clone())
+                    } else {
+                        Ok(v.clone())
                     }
                 }
-            }
+                None => Ok(self.clone()),
+            },
             Value::FuncCall(ref p, ref params) => {
                 let mut nparams = Vec::new();
                 for p in params {
