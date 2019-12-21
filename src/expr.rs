@@ -5,6 +5,7 @@ use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 
 #[derive(PartialEq, Clone, Debug)]
@@ -23,6 +24,7 @@ pub enum Expr {
     Neg(Box<Expr>),
     Op(Token),
     List(Vec<Expr>),
+    Map(BTreeMap<String, Expr>),
 }
 
 impl FromStr for Expr {
@@ -65,6 +67,13 @@ impl Expr {
                 }
                 Value::List(vl)
             }
+            Map(m)=>{
+                let mut t = Value::tree();
+                for (k,v) in m.iter(){
+                    t.set_at_path(Proto::one(k,0).pp(),v.eval(scope)?);
+                }
+                t
+            }
             _ => Value::Num(0),
         })
     }
@@ -98,6 +107,21 @@ impl Expr {
                     }
                 }
                 return Err(it.eof());
+            }
+            Token::SquigleO => {
+                let mut map = BTreeMap::new();
+                while let Some(t) = it.next() {
+                    match t {
+                        Token::Break | Token::Comma => {}
+                        Token::SquigleC => return Ok(Expr::Map(map)),
+                        Token::Ident(s) | Token::Qoth(s) => {
+                            it.next(); //colon
+                            let ex = Expr::from_tokens(it)?;
+                            map.insert(s, ex);
+                        }
+                        e => return Err(it.ux(e,"at treeexpr")),
+                    }
+                }
             }
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
             _ => {
