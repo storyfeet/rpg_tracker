@@ -208,6 +208,13 @@ impl Value {
                     Ok(List(a))
                 }
             },
+            Proto(mut a) => match rhs {
+                Proto(b) => {
+                    a.extend(b.pp());
+                    Ok(Proto(a))
+                }
+                e => Err(ActionError::new(&format!("proto cannot add {:?}", e))),
+            },
             u => Err(ActionError::new(&format!("Add of {:?} not suppported", u))),
         }
     }
@@ -253,9 +260,9 @@ impl Value {
             Value::Num(a) => match rhs {
                 Value::Num(0) => Err(ActionError::new("Can't div by zero")),
                 Value::Num(b) => Ok(Value::Num(a / b)),
-                _ => Err(ActionError::new("No mul on non ex")),
+                _ => Err(ActionError::new("No div on non ex")),
             },
-            _ => Err(ActionError::new("No mul on non ex")),
+            _ => Err(ActionError::new("No div on non ex")),
         }
     }
     pub fn try_neg(self) -> Result<Value, ActionError> {

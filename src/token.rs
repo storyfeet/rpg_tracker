@@ -131,6 +131,7 @@ impl<'a> Tokenizer<'a> {
             }
             match c {
                 ' ' | '\t' => return res,
+                '\\' => res.push(self.it.next().unwrap_or('\\')),
                 _ => res.push(c),
             }
         }
@@ -192,7 +193,6 @@ impl<'a> TokPrev<'a> {
             it: Prev::new(Tokenizer::new(s)),
         }
     }
-
 }
 
 impl<'a> Iterator for TokPrev<'a> {

@@ -20,7 +20,7 @@ impl Display for Proto {
             if i != 0 {
                 write!(f, ".")?;
             }
-            write!(f, "{}", s)?;
+            write!(f, "{}", s.replace(".","\\."))?;
         }
         Ok(())
     }
