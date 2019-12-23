@@ -28,6 +28,12 @@ pub enum SetResult {
     Err(ActionError),
 }
 
+impl From<usize> for Value {
+    fn from(n: usize) -> Self {
+        Value::Num(n as i32)
+    }
+}
+
 impl Value {
     pub fn tree() -> Self {
         Value::Tree(BTreeMap::new())

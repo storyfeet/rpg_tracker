@@ -115,13 +115,13 @@ impl Scope {
         wrap.run_func(proto, params)
     }
 
-    pub fn for_each<IT: Iterator<Item = (usize, Value)>>(
-        &mut self,
-        it: IT,
-        func: Value,
-    ) -> Result<Option<Value>, ActionError> {
-        let actions = match func {
-            Value::FuncDef(_, actions) => actions,
+    pub fn for_each<T, IT>(&mut self, it: IT, func: Value) -> Result<Option<Value>, ActionError>
+    where
+        Value: From<T>,
+        IT: Iterator<Item = (T, Value)>,
+    {
+        let (pnames, actions) = match func {
+            Value::FuncDef(pnames, actions) => (pnames, actions),
             _ => return Err(ActionError::new("foreach requires a func def")),
         };
         let mut scope = Scope {
@@ -131,8 +131,15 @@ impl Scope {
         };
 
         for (k, v) in it {
-            scope.set_param("k", Value::Num(k as i32));
-            scope.set_param("v", v);
+            match pnames.len() {
+                0 => {
+                    scope.set_param("k", Value::from(k));
+                    scope.set_param("v", v);
+                }
+                1 => {
+                    scope.set_param(&pnames[0], v);
+                }
+            }
 
             for a in &actions {
                 let done = scope.do_action(a);
@@ -255,15 +262,15 @@ impl Scope {
                 },
             },
         };
-       // println!("in context res = {}",p);
+        // println!("in context res = {}",p);
         if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
-            return match res.derefs + der.derefs{
-                0 =>Ok(res),
-                1 =>Ok(der.clone()),
-                n => self.in_context(&der.with_set_deref(n-1)),
+            return match res.derefs + der.derefs {
+                0 => Ok(res),
+                1 => Ok(der.clone()),
+                n => self.in_context(&der.with_set_deref(n - 1)),
             };
         }
-        
+
         Ok(res)
     }
 
