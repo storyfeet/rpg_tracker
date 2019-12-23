@@ -61,7 +61,10 @@ pub fn for_each(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, Actio
     if params.len() == 2 {
         match params[0] {
             Value::List(ref l) => {
-                return sc.for_each(l.clone().into_iter().enumerate(), params[1].clone())
+                return sc.for_each(l.clone().into_iter().enumerate(),None, params[1].clone())
+            }
+            Value::Num(n) => {
+                return sc.for_each((0..n).map(|x|Value::Num(x)).enumerate(),Some(Value::Num(0)),params[1].clone())
             }
             _ => return Err(ActionError::new("Must be list for iterator right now")),
         }

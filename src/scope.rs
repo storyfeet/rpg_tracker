@@ -115,7 +115,12 @@ impl Scope {
         wrap.run_func(proto, params)
     }
 
-    pub fn for_each<T, IT>(&mut self, it: IT, func: Value) -> Result<Option<Value>, ActionError>
+    pub fn for_each<T, IT>(
+        &mut self,
+        it: IT,
+        fold: Option<Value>,
+        func: Value,
+    ) -> Result<Option<Value>, ActionError>
     where
         Value: From<T>,
         IT: Iterator<Item = (T, Value)>,
@@ -130,6 +135,12 @@ impl Scope {
             parent: Parent::Mut(self as *mut Scope),
         };
 
+        let fold_name = if pnames.len() > 2 { &pnames[2] } else { "fold" };
+
+        if let Some(f) = fold {
+            scope.set_param(fold_name, f);
+        }
+
         for (k, v) in it {
             match pnames.len() {
                 0 => {
@@ -139,18 +150,17 @@ impl Scope {
                 1 => {
                     scope.set_param(&pnames[0], v);
                 }
+                _ => {
+                    scope.set_param(&pnames[0], Value::from(k));
+                    scope.set_param(&pnames[1], v);
+                }
             }
 
             for a in &actions {
                 let done = scope.do_action(a);
                 match done {
                     Ok(Some(v)) => {
-                        //set res to fold result
-                        let nv = match scope.get_pp(Proto::from_str("var.res").pp()) {
-                            Some(old) => old.clone().try_add(v)?,
-                            None => v,
-                        };
-                        scope.set_param("res", nv);
+                        scope.set_param(fold_name, v);
                         break;
                     }
                     Err(e) => return Err(e),
@@ -158,7 +168,7 @@ impl Scope {
                 }
             }
         }
-        Ok(scope.get_pp(Proto::one("res", 0).pp()).map(|v| v.clone()))
+        Ok(scope.get_pp(Proto::one(fold_name, 0).pp()).map(|v| v.clone()))
     }
 
     fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
