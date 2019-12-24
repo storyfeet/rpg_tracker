@@ -7,6 +7,7 @@ pub enum Token {
     Num(i32),
     Expr,
     Fn,
+    Var,
     Hash,
     Dot,
     Colon,
@@ -173,6 +174,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                     "false" => Token::False,
                     "expr" => Token::Expr,
                     "fn" | "func" => Token::Fn,
+                    "var" => Token::Var,
                     _ => Token::Ident(id),
                 }
             }

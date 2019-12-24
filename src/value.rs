@@ -3,7 +3,7 @@ use crate::error::{ActionError, LineError};
 use crate::expr::Expr;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
-use crate::proto::{Proto, ProtoP};
+use crate::proto::{Proto, ProtoNode, ProtoP};
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::cmp::{Ordering, PartialOrd};
@@ -41,17 +41,6 @@ impl Value {
 
     pub fn str(s: &str) -> Self {
         Value::Str(s.to_string())
-    }
-
-    pub fn proto(p: Proto) -> Self {
-        if p.dots == 0 && p.derefs == 0 {
-            return match p.pp().next().unwrap_or("") {
-                "true" => Value::Bool(true),
-                "false" => Value::Bool(false),
-                _ => Value::Proto(p),
-            };
-        }
-        Value::Proto(p)
     }
 
     pub fn print(&self, depth: usize) -> String {
@@ -114,16 +103,18 @@ impl Value {
         match pp.next() {
             None => Some(self),
             Some(p) => match self {
-                Value::Tree(mp) => match mp.get(p) {
+                Value::Tree(mp) => match mp.get(&p.as_string()) {
                     Some(ch) => return ch.get_path(pp),
                     None => None,
                 },
                 Value::List(l) => {
-                    let n = p.parse::<usize>().ok()?;
-                    match l.get(n) {
-                        Some(ch) => return ch.get_path(pp),
-                        None => None,
+                    if let ProtoNode::Num(n) = p {
+                        return match l.get(*n as usize) {
+                            Some(ch) => return ch.get_path(pp),
+                            None => None,
+                        };
                     }
+                    None
                 }
                 _ => None,
             },
@@ -138,7 +129,7 @@ impl Value {
             None => Some(self),
             Some(p) => match self {
                 Value::Tree(ref mut mp) => {
-                    if let Some(ch) = mp.get_mut(p) {
+                    if let Some(ch) = mp.get_mut(&p.as_string()) {
                         return ch.get_path_mut(pp);
                     }
                     None
@@ -152,9 +143,10 @@ impl Value {
         if pp.remaining() == 1 {
             match self {
                 Value::Tree(t) => {
-                    let rv = t.insert(pp.next().unwrap().to_string(), v);
+                    let rv = t.insert(pp.next().unwrap().as_string(), v);
                     return SetResult::Ok(rv);
                 }
+                //TODO cover list
                 Value::Proto(p) => {
                     return SetResult::Deref(p.extend_new(pp).with_deref(1), v);
                 }
@@ -168,12 +160,12 @@ impl Value {
                 SetResult::Ok(Some(v))
             }
             Some(p) => match self {
-                Value::Tree(mp) => match mp.get_mut(p) {
+                Value::Tree(mp) => match mp.get_mut(&p.as_string()) {
                     Some(ch) => return ch.set_at_path(pp, v),
                     None => {
                         let mut t = Value::tree();
                         let res = t.set_at_path(pp, v);
-                        mp.insert(p.to_string(), t);
+                        mp.insert(p.as_string(), t);
                         return res;
                     }
                 },
@@ -389,9 +381,9 @@ impl Value {
                 it.back();
                 Self::func_def(it)
             }
-            Some(Token::Dollar) | Some(Token::Ident(_)) => {
+            Some(Token::Dollar) | Some(Token::Ident(_)) | Some(Token::Var) => {
                 it.back();
-                let p = Proto::from_tokens(it);
+                let p = Proto::from_tokens(it)?;
                 match it.next() {
                     Some(Token::BracketO) => {
                         let mut params = Vec::new();

@@ -70,7 +70,7 @@ impl Expr {
             Map(m)=>{
                 let mut t = Value::tree();
                 for (k,v) in m.iter(){
-                    t.set_at_path(Proto::one(k,0).pp(),v.eval(scope)?);
+                    t.set_at_path(Proto::one(k,false).pp(),v.eval(scope)?);
                 }
                 t
             }

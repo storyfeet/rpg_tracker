@@ -3,7 +3,7 @@ use crate::api_funcs;
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::parse::ActionReader;
-use crate::proto::{Proto, ProtoP};
+use crate::proto::{Proto, ProtoP,ProtoNode};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 use std::path::Path;
@@ -63,11 +63,6 @@ impl Scope {
     }
 
     pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
-        //proto named var
-        let mut p2 = p.clone();
-        if let Some("var") = p2.next() {
-            return self.get_pp(p2);
-        }
         //var with name exists
         let mut p2 = p.clone();
         if let Some(v) = self.data.get_path(&mut p2) {
@@ -169,12 +164,12 @@ impl Scope {
             }
         }
         Ok(scope
-            .get_pp(Proto::one(fold_name, 0).pp())
+            .get_pp(Proto::one(fold_name, false).pp())
             .map(|v| v.clone()))
     }
 
     fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
-        match proto.pp().next().unwrap_or("") {
+        match proto.as_func_name(){
             "d" => return api_funcs::d(self, params),
             "foreach" => return api_funcs::for_each(self, params),
             "fold" => return api_funcs::fold(self, params),
@@ -187,7 +182,7 @@ impl Scope {
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
 
-        if nparent.pp().next() != Some("self") {
+        if nparent.pp().next() != Some(&ProtoNode::Str("self".to_string())) {
             self.set_param("self", Value::Proto(nparent));
         }
 
@@ -228,20 +223,20 @@ impl Scope {
         }
     }
     pub fn set_param(&mut self, k: &str, v: Value) {
-        self.data.set_at_path(Proto::one(k, 0).pp(), v);
+        self.data.set_at_path(Proto::one(k, false).pp(), v);
     }
 
     pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ActionError> {
         //proto named var
-        let mut p2 = p.clone();
-        if let Some("var") = p2.next() {
+        let p2 = p.clone();
+        if p2.var() {
             let sr = self.data.set_at_path(p2, v);
             return self.on_sr(sr);
         }
         //Try for local variable first
         let mut p2 = p.clone();
         if let Some(vname) = p2.next() {
-            if self.data.has_child(vname) {
+            if self.data.has_child(&vname.as_string()) {
                 let p3 = p.clone();
                 let sr = self.data.set_at_path(p3, v);
                 return self.on_sr(sr);
@@ -260,9 +255,9 @@ impl Scope {
 
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
         //println!("in context p = {}",p);
-        let res = match p.dots {
-            0 => p.clone(),
-            _ => match self.base.as_ref() {
+        let res = match p.dotted {
+            false => p.clone(),
+            true => match self.base.as_ref() {
                 Some(b) => b.extend_new(p.pp()),
                 None => unsafe {
                     match self.parent {

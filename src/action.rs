@@ -30,8 +30,8 @@ impl Action {
             .map_err(|p| p.set_line(t.line()))?
             .to_string();
         match sign {
-            Token::Add => Ok(Action::Add(Proto::one(&id, 1), Expr::num(n))),
-            Token::Sub => Ok(Action::Sub(Proto::one(&id, 1), Expr::num(n))),
+            Token::Add => Ok(Action::Add(Proto::one(&id, true), Expr::num(n))),
+            Token::Sub => Ok(Action::Sub(Proto::one(&id, true), Expr::num(n))),
             _ => Err(t.err("Not Addable")),
         }
     }
@@ -60,8 +60,7 @@ impl Action {
             _ => {
                 t.back();
                 Ok(Action::Expr(Expr::proto(p)))
-            }
-            //e => Err(t.ux(e, "after ident")),
+            } //e => Err(t.ux(e, "after ident")),
         }
     }
 
@@ -74,7 +73,7 @@ impl Action {
             Token::Colon => Ok(Action::Select(None)),
             Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
                 t.back();
-                let p = Proto::from_tokens(t);
+                let p = Proto::from_tokens(t)?;
                 //println!("PROTO from_tokens= {:?}",p);
                 Self::from_proto(p, t)
             }
