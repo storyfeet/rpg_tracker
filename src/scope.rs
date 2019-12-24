@@ -168,13 +168,16 @@ impl Scope {
                 }
             }
         }
-        Ok(scope.get_pp(Proto::one(fold_name, 0).pp()).map(|v| v.clone()))
+        Ok(scope
+            .get_pp(Proto::one(fold_name, 0).pp())
+            .map(|v| v.clone()))
     }
 
     fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
         match proto.pp().next().unwrap_or("") {
             "d" => return api_funcs::d(self, params),
             "foreach" => return api_funcs::for_each(self, params),
+            "fold" => return api_funcs::fold(self, params),
             "load" => return api_funcs::load(self, params),
             "link" => return api_funcs::link(self, params),
             "if" => return api_funcs::if_expr(self, params),

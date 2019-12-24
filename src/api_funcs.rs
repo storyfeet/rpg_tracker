@@ -13,9 +13,9 @@ pub fn d(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError
     Ok(Some(Value::Num(res)))
 }
 
-pub fn link(_sc: &mut Scope,params:&[Value])->Result<Option<Value>,ActionError>{
-    match params.get(0){
-        Some(Value::Proto(p))=>Ok(Some(Value::Proto(p.with_deref(1)))),
+pub fn link(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
+    match params.get(0) {
+        Some(Value::Proto(p)) => Ok(Some(Value::Proto(p.with_deref(1)))),
         _ => Err(ActionError::new("can only link on protos")),
     }
 }
@@ -53,18 +53,39 @@ pub fn if_expr(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, Actio
     }
 }
 
-/// final function should take (k,v) as params
+pub fn fold(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
+    match params.len() {
+        n if n < 3 => Err(ActionError::new(
+            "Fold requires 3 params : foldvar,iterble,func",
+        )),
+        _ => fold_each(sc, params.get(0).map(|n| n.clone()), &params[1..]),
+    }
+}
+
 pub fn for_each(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
+    fold_each(sc, None, params)
+}
+
+/// final function should take (k,v) as params
+fn fold_each(
+    sc: &mut Scope,
+    fold: Option<Value>,
+    params: &[Value],
+) -> Result<Option<Value>, ActionError> {
     if params.len() <= 1 {
-        return Err(ActionError::new("Foreach requires at least 2 params"));
+        return Err(ActionError::new("FoldEach requires at least 2 params"));
     }
     if params.len() == 2 {
         match params[0] {
             Value::List(ref l) => {
-                return sc.for_each(l.clone().into_iter().enumerate(),None, params[1].clone())
+                return sc.for_each(l.clone().into_iter().enumerate(), fold, params[1].clone())
             }
             Value::Num(n) => {
-                return sc.for_each((0..n).map(|x|Value::Num(x)).enumerate(),Some(Value::Num(0)),params[1].clone())
+                return sc.for_each(
+                    (0..n).map(|x| Value::Num(x)).enumerate(),
+                    fold,
+                    params[1].clone(),
+                )
             }
             _ => return Err(ActionError::new("Must be list for iterator right now")),
         }
