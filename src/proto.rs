@@ -1,14 +1,10 @@
-use crate::error::LineError;
-use crate::prev_iter::LineCounter;
-use crate::expr::Expr;
-use crate::prev_iter::Backer;
-use crate::token::{TokPrev, Token};
 use std::fmt::{Display, Formatter};
+use crate::value::Value;
+use crate::error::ActionError;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProtoNode {
     Num(i32),
-    Expr(Expr),
     Str(String),
 }
 
@@ -20,7 +16,6 @@ impl ProtoNode {
     pub fn as_string(&self)->String{
         match self{
             ProtoNode::Num(n)=>n.to_string(),
-            ProtoNode::Expr(e)=>format!("{}",e.print()),
             ProtoNode::Str(s)=>s.clone(),
         }
     }
@@ -48,7 +43,6 @@ impl Display for Proto {
             }
             match node {
                 ProtoNode::Num(n) => write!(f, "{}", n)?,
-                ProtoNode::Expr(e) => write!(f, "{:?}", e)?,
                 ProtoNode::Str(s) => write!(f, "{}", s.replace(".", "\\."))?,
             }
         }
@@ -57,34 +51,34 @@ impl Display for Proto {
 }
 
 impl Proto {
-    pub fn empty(dotted: bool) -> Self {
+    pub fn new() -> Self {
         Proto {
-            dotted,
+            dotted:false,
             derefs: 0,
             var:false,
             v: Vec::new(),
         }
     }
-    pub fn one(s: &str, dotted: bool) -> Self {
+    pub fn one(s: &str) -> Self {
         Proto {
-            dotted,
+            dotted:false,
             var:false,
             v: vec![ProtoNode::str(s)],
             derefs: 0,
         }
     }
 
-    pub fn var(s: &str) -> Self {
-        Proto {
-            dotted: false,
-            var:true,
-            v: vec![ProtoNode::str("var"), ProtoNode::str(s)],
-            derefs: 0,
-        }
+    pub fn dot(self) ->Self{
+        self.dotted = true;
+        self
     }
-    pub fn new(s: &str) -> Result<Self,LineError> {
-        let mut t = TokPrev::new(s);
-        Self::from_tokens(&mut t)
+    pub fn var(self) -> Self {
+        self.var = true;
+        self
+    }
+    pub fn deref(self, n:i32)->Self{
+        self.derefs += n;
+        self
     }
 
     pub fn as_func_name(&self)->&str{
@@ -109,49 +103,16 @@ impl Proto {
         res
     }
 
-    pub fn from_str(s: &str) -> Result<Self,LineError> {
-        let mut tp = TokPrev::new(s);
-        Self::from_tokens(&mut tp)
-    }
 
-    pub fn from_tokens(t: &mut TokPrev) -> Result<Self, LineError> {
-        let mut res = Proto::empty(false);
 
-        match t.next() {
-            Some(Token::Var)=>res.var = true,
-            Some(Token::Dot)=>res.dotted = true,
-            _=>t.back()
+    pub fn push_val(&mut self, v: Value)->Result<(),ActionError> {
+        match v {
+            Value::Str(s)=>self.v.push(ProtoNode::Str(s)),
+            Value::Num(n)=>self.v.push(ProtoNode::Num(n)),
+            e=>return Err(ActionError::new("proto parts must resolve to str or num"))
         }
-        while let Some(Token::Dollar) = t.next(){
-            res.derefs +=1;
-        }
-        t.back();
+        Ok(())
 
-        while let Some(v) = t.next() {
-            match v {
-                Token::Dot => return Err(t.err("Double Dot")),
-                Token::Qoth(s) | Token::Ident(s) => res.v.push(ProtoNode::str(&s)),
-                Token::Num(n) => res.v.push(ProtoNode::Num(n)),
-                _ => {
-                    t.back();
-                    res.v.push(ProtoNode::Expr(Expr::from_tokens(t)?));
-                }
-            }
-
-            match t.next(){
-                Some(Token::Dot)=>{},
-                _=>{
-                    t.back();
-                    return Ok(res);
-                }
-
-            }
-        }
-        Ok(res)
-    }
-
-    pub fn push(&mut self, s: &str) {
-        self.v.push(ProtoNode::str(s))
     }
 
     pub fn pp<'a>(&'a self) -> ProtoP<'a> {

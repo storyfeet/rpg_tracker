@@ -7,11 +7,14 @@ use crate::token::{TokPrev, Token};
 use crate::value::Value;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use crate::proto_ex::ProtoX;
+
+
+
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Val(Value),
-    //CallFunc(Proto, Vec<Expr>),
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
@@ -19,12 +22,12 @@ pub enum Expr {
     Less(Box<Expr>, Box<Expr>),
     Greater(Box<Expr>, Box<Expr>),
     Equal(Box<Expr>, Box<Expr>),
-    And(Box<Expr>, Box<Expr>),
-    Or(Box<Expr>, Box<Expr>),
     Neg(Box<Expr>),
     Op(Token),
     List(Vec<Expr>),
     Map(BTreeMap<String, Expr>),
+    ProtoEx(ProtoX),
+    CallFunc(ProtoX, Vec<Expr>),
 }
 
 impl FromStr for Expr {
@@ -67,14 +70,22 @@ impl Expr {
                 }
                 Value::List(vl)
             }
-            Map(m)=>{
+            Map(m) => {
                 let mut t = Value::tree();
-                for (k,v) in m.iter(){
-                    t.set_at_path(Proto::one(k,false).pp(),v.eval(scope)?);
+                for (k, v) in m.iter() {
+                    t.set_at_path(Proto::one(k).pp(), v.eval(scope)?);
                 }
                 t
             }
-            _ => Value::Num(0),
+            ProtoEx(p) => {
+                let mut res = Proto::new().deref(p.d);
+                if p.dot { res = res.dot()}
+                if p.var { res = res.var()}
+                for e in p.exs {
+                    res.push_val(e.eval(scope)?);
+                }
+                Value::Proto(res)
+            }
         })
     }
 
@@ -119,7 +130,7 @@ impl Expr {
                             let ex = Expr::from_tokens(it)?;
                             map.insert(s, ex);
                         }
-                        e => return Err(it.ux(e,"at treeexpr")),
+                        e => return Err(it.ux(e, "at treeexpr")),
                     }
                 }
             }
