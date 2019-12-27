@@ -1,25 +1,93 @@
 use crate::token::Token;
 use crate::expr::Expr;
-use crate::error::LineError;
+use crate::error::{LineError,ActionError};
 use crate::token::TokPrev;
 use crate::prev_iter::{Backer,LineCounter};
 use crate::value::Value;
+use crate::scope::Scope;
+use crate::proto::Proto;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct ProtoX{
-    pub d:i32,
-    pub dot:bool,
-    pub var:bool,
-    pub exs:Vec<Expr>,
+    d:i32,
+    dot:bool,
+    var:bool,
+    exs:Vec<Expr>,
+    params:Option<Vec<Expr>>,
 }
 
 impl ProtoX{
+    pub fn push_param(&mut self, e:Expr){
+        if let Some(ref mut p) = self.params{
+            p.push(e); 
+            return 
+        }
+        self.params = Some(vec![e]);
+    }
+    
+    pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
+        let mut proto = Proto::new().deref(self.d);
+        if self.dot { proto = proto.dot()}
+        if self.var { proto = proto.var()}
+        for e in self.exs {
+            proto.push_val(e.eval(scope)?);
+        }
+
+        //resolve proto to value
+        let mut derefs = proto.derefs;
+
+        let mut val = None;
+        while derefs > 0{
+            match scope.get_pp(proto.pp()){
+                Some(Value::Proto(np)) => {
+                    derefs = derefs + np.derefs -1;
+                    proto = np.clone();
+                },
+                Some(v) => {
+                    derefs = 0;
+                    val = Some(v);
+                }
+                None =>{
+                    derefs = 0;
+                    val = Some(Value::Proto(proto.with_set_deref(derefs)))
+                }
+            }
+        }
+        match val {
+            Some(Value::FuncDef(pnames,actions))=>if let Some(pv) = self.params(){
+                params = Vec::new();
+                for p in pv{
+                    params.push(p.eval(scope)?);
+                }
+                scope
+                    .call_func_mut(p.clone(), &params)?
+                    .ok_or(ActionError::new("func in expr returns no value"))
+            }else {
+
+            }
+            Some(Value::ExprDef){
+                scope.call
+            }
+            Some(v) => v,
+
+        }
+        if let Some(pv) = self.params(){
+            params = Vec::new();
+            for p in pv{
+                params.push(p.eval(scope)?);
+            }
+        }
+           
+    }
+
+
     pub fn from_tokens(t: &mut TokPrev) -> Result<Self, LineError> {
         let mut res = ProtoX{
             d:0,
             dot:false,
             var:false,
             exs:Vec::new(),
+            params:None,
         };
 
 
@@ -46,6 +114,21 @@ impl ProtoX{
 
             match t.next(){
                 Some(Token::Dot)=>{},
+                Some(Token::BracketO) => {
+                    res.params = Some(Vec::new());
+                    let mut params = Vec::new();
+                    while let Some(tk) = t.next() {
+                        match tk {
+                            Token::BracketC => return Ok(res),
+                            Token::Comma => {}
+                            _ => {
+                                t.back();
+                                res.push_param(Expr::from_tokens(t)?);
+                            }
+                        }
+                    }
+                    return Err(t.eof());
+                }
                 _=>{
                     t.back();
                     return Ok(res);

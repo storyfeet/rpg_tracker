@@ -26,8 +26,7 @@ pub enum Expr {
     Op(Token),
     List(Vec<Expr>),
     Map(BTreeMap<String, Expr>),
-    ProtoEx(ProtoX),
-    CallFunc(ProtoX, Vec<Expr>),
+    ProtoEx(ProtoX), //Also covers call func
 }
 
 impl FromStr for Expr {
@@ -54,7 +53,7 @@ impl Expr {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
-            Val(n) => n.resolve_path(scope)?,
+            Val(n) => n.clone(),
             Add(a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
             Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
@@ -77,15 +76,7 @@ impl Expr {
                 }
                 t
             }
-            ProtoEx(p) => {
-                let mut res = Proto::new().deref(p.d);
-                if p.dot { res = res.dot()}
-                if p.var { res = res.var()}
-                for e in p.exs {
-                    res.push_val(e.eval(scope)?);
-                }
-                Value::Proto(res)
-            }
+            ProtoEx(p) => p.eval(scope)?,
         })
     }
 
@@ -159,6 +150,11 @@ impl Expr {
                     } else {
                         parts.push(Expr::Op(Token::Sub));
                     }
+                }
+                Token::Dollar|Token::Ident(_) |Token::Var => {
+                    it.back();
+                    let p = ProtoX::from_tokens(it)?;
+                    parts.push(Expr::ProtoEx(p));
                 }
                 _ => {
                     it.back();

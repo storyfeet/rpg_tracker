@@ -16,10 +16,9 @@ pub enum Value {
     Str(String),
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
-    Proto(Proto),
     ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
-    FuncCall(Proto, Vec<Expr>),
+    Proto(Proto),
 }
 
 pub enum SetResult {
@@ -295,37 +294,6 @@ impl PartialOrd for Value {
 }
 
 impl Value {
-    pub fn resolve_path(&self, scope: &Scope) -> Result<Value, ActionError> {
-        match self {
-            Value::Proto(ref p) => match scope.get_pp(p.pp()) {
-                Some(Value::Proto(np)) => match p.derefs + np.derefs {
-                    0 => Ok(self.clone()),
-                    1 => Ok(Value::Proto(np.clone())),
-                    n => Value::Proto(np.with_set_deref(n - 1)).resolve_path(scope),
-                },
-                Some(v) => {
-                    if p.derefs == 0 {
-                        Ok(self.clone())
-                    } else {
-                        Ok(v.clone())
-                    }
-                }
-                None => Ok(self.clone()),
-            },
-            Value::FuncCall(ref p, ref params) => {
-                let mut nparams = Vec::new();
-                for p in params {
-                    nparams.push(p.eval(scope)?);
-                }
-                scope
-                    .call_func_const(p.clone(), &nparams)?
-                    .ok_or(ActionError::new("func in expr returns no value"))
-            }
-
-            _ => Ok(self.clone()),
-        }
-    }
-
     pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
         //handle bracket
         match it.next().ok_or(it.eof())? {
@@ -380,30 +348,6 @@ impl Value {
             Some(Token::Expr) | Some(Token::Fn) => {
                 it.back();
                 Self::func_def(it)
-            }
-            Some(Token::Dollar) | Some(Token::Ident(_)) | Some(Token::Var) => {
-                it.back();
-                let p = Proto::from_tokens(it)?;
-                match it.next() {
-                    Some(Token::BracketO) => {
-                        let mut params = Vec::new();
-                        while let Some(tk) = it.next() {
-                            match tk {
-                                Token::BracketC => return Ok(Value::FuncCall(p, params)),
-                                Token::Comma => {}
-                                _ => {
-                                    it.back();
-                                    params.push(Expr::from_tokens(it)?);
-                                }
-                            }
-                        }
-                        Err(it.eof())
-                    }
-                    _ => {
-                        it.back();
-                        Ok(Value::Proto(p))
-                    }
-                }
             }
             Some(Token::SquareO) => {
                 let mut rlist = Vec::new();
