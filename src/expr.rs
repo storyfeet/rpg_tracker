@@ -2,15 +2,12 @@ use crate::error::{ActionError, LineError};
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
+use crate::proto_ex::ProtoX;
 use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use crate::value::Value;
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use crate::proto_ex::ProtoX;
-
-
-
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
@@ -151,7 +148,7 @@ impl Expr {
                         parts.push(Expr::Op(Token::Sub));
                     }
                 }
-                Token::Dollar|Token::Ident(_) |Token::Var => {
+                Token::Dollar | Token::Ident(_) | Token::Var => {
                     it.back();
                     let p = ProtoX::from_tokens(it)?;
                     parts.push(Expr::ProtoEx(p));

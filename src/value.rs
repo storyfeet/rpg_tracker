@@ -4,7 +4,6 @@ use crate::expr::Expr;
 use crate::prev_iter::Backer;
 use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoNode, ProtoP};
-use crate::scope::Scope;
 use crate::token::{TokPrev, Token};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::BTreeMap;
@@ -67,9 +66,6 @@ impl Value {
             }
             FuncDef(params, _) => {
                 res.push_str(&format!("func{:?}", params));
-            }
-            FuncCall(p, params) => {
-                res.push_str(&format!("Call -- {}{:?}", p, params));
             }
             List(l) => {
                 res.push('[');

@@ -3,7 +3,7 @@ use crate::api_funcs;
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::parse::ActionReader;
-use crate::proto::{Proto, ProtoP,ProtoNode};
+use crate::proto::{Proto, ProtoNode, ProtoP};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 use std::path::Path;
@@ -84,30 +84,14 @@ impl Scope {
         }
         None
     }
-    pub fn call_func_const(
-        &self,
-        proto: Proto,
-        params: &[Value], //resolve expressions before calling func
-    ) -> Result<Option<Value>, ActionError> {
+
+    pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
         let mut wrap = Scope {
             base: None,
             data: Value::tree(),
             parent: Parent::Const(self as *const Scope),
         };
-        wrap.run_func(proto, params)
-    }
-
-    pub fn call_func_mut(
-        &mut self,
-        proto: Proto,
-        params: &[Value],
-    ) -> Result<Option<Value>, ActionError> {
-        let mut wrap = Scope {
-            base: None,
-            data: Value::tree(),
-            parent: Parent::Mut(self as *mut Scope),
-        };
-        wrap.run_func(proto, params)
+        ex.eval(&mut wrap)
     }
 
     pub fn for_each<T, IT>(
@@ -163,21 +147,20 @@ impl Scope {
                 }
             }
         }
-        Ok(scope
-            .get_pp(Proto::one(fold_name, false).pp())
-            .map(|v| v.clone()))
+        Ok(scope.get_pp(Proto::one(fold_name).pp()).map(|v| v.clone()))
     }
 
-    fn run_func(&mut self, proto: Proto, params: &[Value]) -> Result<Option<Value>, ActionError> {
-        match proto.as_func_name(){
-            "d" => return api_funcs::d(self, params),
-            "foreach" => return api_funcs::for_each(self, params),
-            "fold" => return api_funcs::fold(self, params),
-            "load" => return api_funcs::load(self, params),
-            "link" => return api_funcs::link(self, params),
-            "if" => return api_funcs::if_expr(self, params),
-            _ => {}
-        }
+    pub fn run_func(
+        &mut self,
+        pnames: &[String],
+        actions: &[Action],
+        params: &[Value],
+    ) -> Result<Option<Value>, ActionError> {
+        let mut scope = Scope {
+            base: None,
+            data: Value::tree(),
+            parent: Parent::Mut(self as *mut Scope),
+        };
 
         let np = self.in_context(&proto)?;
         let nparent = np.parent();
@@ -223,7 +206,7 @@ impl Scope {
         }
     }
     pub fn set_param(&mut self, k: &str, v: Value) {
-        self.data.set_at_path(Proto::one(k, false).pp(), v);
+        self.data.set_at_path(Proto::one(k).pp(), v);
     }
 
     pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ActionError> {

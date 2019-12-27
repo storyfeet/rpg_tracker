@@ -6,6 +6,7 @@ use crate::prev_iter::{Backer,LineCounter};
 use crate::value::Value;
 use crate::scope::Scope;
 use crate::proto::Proto;
+use crate::api_funcs;
 
 #[derive(PartialEq, Clone, Debug)]
 pub struct ProtoX{
@@ -41,33 +42,40 @@ impl ProtoX{
             match scope.get_pp(proto.pp()){
                 Some(Value::Proto(np)) => {
                     derefs = derefs + np.derefs -1;
-                    proto = np.clone();
+                    proto = np.with_set_deref(derefs);
                 },
                 Some(v) => {
-                    derefs = 0;
-                    val = Some(v);
+                    return Ok(v.clone());
                 }
                 None =>{
-                    derefs = 0;
-                    val = Some(Value::Proto(proto.with_set_deref(derefs)))
+                    return Err(ActionError::new("proto points to nothing"));
                 }
             }
         }
+        match proto.as_func_name() {
+            "d" => return api_funcs::d(self, params),
+            "foreach" => return api_funcs::for_each(self, params),
+            "fold" => return api_funcs::fold(self, params),
+            "load" => return api_funcs::load(self, params),
+            "link" => return api_funcs::link(self, params),
+            "if" => return api_funcs::if_expr(self, params),
+            _ => {}
+        }
         match val {
-            Some(Value::FuncDef(pnames,actions))=>if let Some(pv) = self.params(){
-                params = Vec::new();
+            Some(Value::FuncDef(pnames,actions))=>if let Some(pv) = self.params{
+                let mut params = Vec::new();
                 for p in pv{
                     params.push(p.eval(scope)?);
                 }
                 scope
-                    .call_func_mut(p.clone(), &params)?
+                    .run_func(&pnames,&actions, &params)?
                     .ok_or(ActionError::new("func in expr returns no value"))
             }else {
 
             }
-            Some(Value::ExprDef){
-                scope.call
-            }
+            Some(Value::ExprDef(e))=> if let Some(pv) = self.params{// has brackets
+                return e.eval(scope);
+            }else {return Ok(Value::ExprDef(e))}
             Some(v) => v,
 
         }
