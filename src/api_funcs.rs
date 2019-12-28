@@ -30,7 +30,7 @@ pub fn load(sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionErr
     match params.get(1) {
         Some(Value::Proto(p)) => {
             let new_sc = Scope::from_file(fv)?;
-            sc.set_pp(p.pp(), new_sc.eat_data())?;
+            sc.set(p, new_sc.eat_data())?;
             Ok(None)
         }
         Some(_) => Err(ActionError::new("target should be proto")),

@@ -2,15 +2,16 @@ use crate::error::LineError;
 use crate::expr::Expr;
 use crate::prev_iter::{Backer, LineCounter};
 use crate::proto::Proto;
+use crate::proto_ex::ProtoX;
 use crate::token::{TokPrev, Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Select(Option<Proto>),
-    Add(Proto, Expr),
-    Sub(Proto, Expr),
-    Set(Proto, Expr),
-    CallFunc(Proto, Vec<Expr>),
+    Add(ProtoX, Expr),
+    Sub(ProtoX, Expr),
+    Set(ProtoX, Expr),
+    CallFunc(ProtoX, Vec<Expr>),
     Expr(Expr),
 }
 
@@ -73,7 +74,7 @@ impl Action {
             Token::Colon => Ok(Action::Select(None)),
             Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
                 t.back();
-                let p = Proto::from_tokens(t)?;
+                let p = ProtoEx::from_tokens(t)?;
                 //println!("PROTO from_tokens= {:?}",p);
                 Self::from_proto(p, t)
             }

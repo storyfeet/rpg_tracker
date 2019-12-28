@@ -26,7 +26,7 @@ impl ProtoX{
         self.params = Some(vec![e]);
     }
     
-    pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
+    pub fn eval(&self, scope: &Scope) -> Result<Option<Value>, ActionError> {
         let mut proto = Proto::new().deref(self.d);
         if self.dot { proto = proto.dot()}
         if self.var { proto = proto.var()}
@@ -39,33 +39,33 @@ impl ProtoX{
 
         let mut val = None;
         while derefs > 0{
-            match scope.get_pp(proto.pp()){
+            match scope.get(&proto){
                 Some(Value::Proto(np)) => {
                     derefs = derefs + np.derefs -1;
                     proto = np.with_set_deref(derefs);
                 },
                 Some(v) => {
-                    return Ok(v.clone());
+                    return Ok(Some(v.clone()));
                 }
                 None =>{
                     return Err(ActionError::new("proto points to nothing"));
                 }
             }
         }
-        match proto.as_func_name() {
-            "d" => return api_funcs::d(self, params),
-            "foreach" => return api_funcs::for_each(self, params),
-            "fold" => return api_funcs::fold(self, params),
-            "load" => return api_funcs::load(self, params),
-            "link" => return api_funcs::link(self, params),
-            "if" => return api_funcs::if_expr(self, params),
-            _ => {}
-        }
         match val {
             Some(Value::FuncDef(pnames,actions))=>if let Some(pv) = self.params{
                 let mut params = Vec::new();
                 for p in pv{
                     params.push(p.eval(scope)?);
+                }
+                match proto.as_func_name() {
+                    "d" => return api_funcs::d(self, &params),
+                    "foreach" => return api_funcs::for_each(self, params),
+                    "fold" => return api_funcs::fold(self, params),
+                    "load" => return api_funcs::load(self, params),
+                    "link" => return api_funcs::link(self, params),
+                    "if" => return api_funcs::if_expr(self, params),
+                    _ => {}
                 }
                 scope
                     .run_func(&pnames,&actions, &params)?

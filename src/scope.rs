@@ -1,9 +1,8 @@
 use crate::action::Action;
-use crate::api_funcs;
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::parse::ActionReader;
-use crate::proto::{Proto, ProtoNode, ProtoP};
+use crate::proto::{Proto, ProtoNode};
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 use std::path::Path;
@@ -62,27 +61,19 @@ impl Scope {
         Ok(())
     }
 
-    pub fn get_pp(&self, p: ProtoP) -> Option<&Value> {
-        //var with name exists
-        let mut p2 = p.clone();
-        if let Some(v) = self.data.get_path(&mut p2) {
-            if p2.remaining() > 0 {
-                if let Value::Proto(v2) = v {
-                    let np = v2.extend_new(p2);
-                    return self.get_pp(np.pp());
-                }
-            }
+    pub fn get(&self, p: &Proto) -> Option<&Value> {
+        let pc = self.in_context(p).ok()?; // CONSIDER: make fn return result
+                                           //var with name exists
+        if let Some(v) = self.data.get_path(&mut pc.pp()) {
             return Some(v);
         }
-
         unsafe {
             match self.parent {
-                Parent::Mut(par) => return (&*par).get_pp(p),
-                Parent::Const(par) => return (&*par).get_pp(p),
-                Parent::None => {}
+                Parent::Mut(par) => (&*par).get(p),
+                Parent::Const(par) => (&*par).get(p),
+                Parent::None => None,
             }
         }
-        None
     }
 
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
@@ -147,7 +138,7 @@ impl Scope {
                 }
             }
         }
-        Ok(scope.get_pp(Proto::one(fold_name).pp()).map(|v| v.clone()))
+        Ok(scope.get(&Proto::one(fold_name)).map(|v| v.clone()))
     }
 
     pub fn run_func(
@@ -162,31 +153,15 @@ impl Scope {
             parent: Parent::Mut(self as *mut Scope),
         };
 
-        let np = self.in_context(&proto)?;
-        let nparent = np.parent();
-
-        if nparent.pp().next() != Some(&ProtoNode::Str("self".to_string())) {
-            self.set_param("self", Value::Proto(nparent));
-        }
-
-        let f_load = self
-            .get_pp(np.pp())
-            .ok_or(ActionError::new("nothing at funcname"))?
-            .clone();
-        let (pnames, actions) = match f_load {
-            Value::ExprDef(ex) => return self.do_action(&Action::Expr(*ex)),
-            Value::FuncDef(pn, ac) => (pn, ac),
-            _ => return Err(ActionError::new("func on notafunc")),
-        };
 
         for p in 0..params.len() {
             if pnames.len() > p {
-                self.set_param(&pnames[p], params[p].clone());
+                scope.set_param(&pnames[p], params[p].clone());
             }
         }
 
-        for a in &actions {
-            let done = self.do_action(a);
+        for a in actions {
+            let done = scope.do_action(a);
             match done {
                 Ok(Some(v)) => {
                     return Ok(Some(v));
@@ -198,71 +173,58 @@ impl Scope {
         Ok(None)
     }
 
-    fn on_sr(&mut self, sr: SetResult) -> Result<Option<Value>, ActionError> {
-        match sr {
-            SetResult::Ok(v) => return Ok(v),
-            SetResult::Deref(p, v) => return self.set_pp(p.pp(), v),
-            SetResult::Err(e) => return Err(e),
-        }
-    }
     pub fn set_param(&mut self, k: &str, v: Value) {
         self.data.set_at_path(Proto::one(k).pp(), v);
     }
 
-    pub fn set_pp(&mut self, p: ProtoP, v: Value) -> Result<Option<Value>, ActionError> {
+    fn on_sr(&mut self, sr: SetResult) -> Result<Option<Value>, ActionError> {
+        match sr {
+            SetResult::Ok(v) => Ok(v),
+            SetResult::Deref(p, v) => self.set(&p, v),
+            SetResult::Err(e) => Err(e),
+        }
+    }
+
+    pub fn set(&mut self, p: &Proto, v: Value) -> Result<Option<Value>, ActionError> {
         //proto named var
-        let p2 = p.clone();
-        if p2.var() {
-            let sr = self.data.set_at_path(p2, v);
+        if p.var {
+            let sr = self.data.set_at_path(p.pp(), v);
             return self.on_sr(sr);
         }
+
+        let p2 = self.in_context(p)?;
         //Try for local variable first
-        let mut p2 = p.clone();
-        if let Some(vname) = p2.next() {
+        if let Some(vname) = p2.pp().next() {
             if self.data.has_child(&vname.as_string()) {
-                let p3 = p.clone();
-                let sr = self.data.set_at_path(p3, v);
+                let sr = self.data.set_at_path(p2.pp(), v);
                 return self.on_sr(sr);
             }
         }
         //try parent
         unsafe {
             if let Parent::Mut(par) = self.parent {
-                return (&mut *par).set_pp(p, v);
+                return (&mut *par).set(p, v);
             }
         }
-
-        let sr = self.data.set_at_path(p, v);
+        let sr = self.data.set_at_path(p.pp(), v);
         self.on_sr(sr)
     }
 
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
         //println!("in context p = {}",p);
-        let res = match p.dotted {
-            false => p.clone(),
+        match p.dotted {
+            false => Ok(p.clone()),
             true => match self.base.as_ref() {
-                Some(b) => b.extend_new(p.pp()),
+                Some(b) => Ok(b.extend_new(p.pp())),
                 None => unsafe {
                     match self.parent {
-                        Parent::Const(par) => return (&*par).in_context(p),
-                        Parent::Mut(par) => return (&*par).in_context(p),
-                        Parent::None => {
-                            return Err(ActionError::new("Cannot find context for '.'"))
-                        }
+                        Parent::Const(par) => (&*par).in_context(p),
+                        Parent::Mut(par) => (&*par).in_context(p),
+                        Parent::None => Err(ActionError::new("Cannot find context for '.'")),
                     }
                 },
             },
-        };
-        // println!("in context res = {}",p);
-        if let Some(Value::Proto(der)) = self.get_pp(res.pp()) {
-            return match res.derefs + der.derefs {
-                0 => Ok(res),
-                1 => Ok(der.clone()),
-                n => self.in_context(&der.with_set_deref(n - 1)),
-            };
         }
-
-        Ok(res)
     }
 
     pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
@@ -272,46 +234,43 @@ impl Scope {
         match a {
             Action::Select(proto_op) => {
                 if let Some(proto) = proto_op {
-                    let np = self.in_context(&proto)?;
-                    match self.get_pp(np.pp()) {
+                    match self.get(&proto) {
                         Some(_) => {}
                         _ => {
-                            self.set_pp(np.pp(), Value::tree())
+                            self.set(&proto, Value::tree())
                                 .map_err(|_| err("count not Create object for selct"))?;
                         }
                     }
-                    self.base = Some(np);
+                    self.base = Some(self.in_context(&proto)?);
                     return Ok(None);
                 }
                 self.base = None;
             }
-            Action::Set(proto, v) => {
-                let np = self.in_context(proto)?;
-                self.set_pp(np.pp(), v.eval(self)?)
+            Action::Set(px, v) => {
+                let proto = px.eval(self)?;
+                self.set(&proto, v.eval(self)?)
                     .map_err(|_| err("Could not Set"))?;
             }
             Action::Add(proto, v) => {
-                let np = self.in_context(proto)?;
-                match self.get_pp(np.pp()) {
+                match self.get(&proto) {
                     Some(ov) => {
                         let nv = ov.clone().try_add(v.eval(self)?)?;
-                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not Add"))?;
+                        self.set(&proto, nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.set_pp(np.pp(), v.eval(self)?)
+                        self.set(&proto, v.eval(self)?)
                             .map_err(|_| err("Coult not add"))?;
                     }
                 }
             }
             Action::Sub(proto, v) => {
-                let np = self.in_context(&proto)?;
-                match self.get_pp(np.pp()) {
+                match self.get(&proto) {
                     Some(ov) => {
                         let nv = ov.clone().try_sub(v.eval(self)?)?;
-                        self.set_pp(np.pp(), nv).map_err(|_| err("Could not sub"))?;
+                        self.set(&proto, nv).map_err(|_| err("Could not sub"))?;
                     }
                     None => {
-                        self.set_pp(np.pp(), Expr::neg(v.clone()).eval(self)?)
+                        self.set(&proto, Expr::neg(v.clone()).eval(self)?)
                             .map_err(|_| err("Coult not sub"))?;
                     }
                 }
@@ -321,6 +280,8 @@ impl Scope {
                 let mut nparams = Vec::new();
                 for p in params {
                     nparams.push(p.eval(&self)?);
+                }
+                match self.get(&proto){
                 }
                 return self.call_func_mut(proto.clone(), &nparams);
             }
