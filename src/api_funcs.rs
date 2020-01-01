@@ -2,6 +2,22 @@ use crate::error::ActionError;
 use crate::scope::Scope;
 use crate::value::Value;
 
+pub fn run_api_expr(fname:&str,scope:&Scope,params:&[Value])->Option<Result<Option<Value>,ActionError>>{
+    scope.on_wrap(|wrap|{run_api_func(fname,wrap,params)})
+}
+
+pub fn run_api_func(fname:&str,scope:&mut Scope,params:&[Value])->Option<Result<Option<Value>,ActionError>>{
+    Some(match fname{
+        "d" => d(scope,params),
+        "foreach" => for_each(scope,&params),
+        "fold" => fold(scope,&params),
+        "load" => load(scope,&params),
+        "if" => if_expr(scope,&params),
+        "link" => link(scope,&params),
+        _ => {return None}
+    })
+}
+
 pub fn d(_sc: &mut Scope, params: &[Value]) -> Result<Option<Value>, ActionError> {
     let mut res = 0;
     for p in params {

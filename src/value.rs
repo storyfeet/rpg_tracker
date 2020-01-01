@@ -41,6 +41,13 @@ impl Value {
         Value::Str(s.to_string())
     }
 
+    pub fn as_proto(&self) -> Result<&Proto, ActionError> {
+        match self {
+            Value::Proto(p) => Ok(p),
+            _ => Err(ActionError::new("Cannot treat non proto as proto")),
+        }
+    }
+
     pub fn print(&self, depth: usize) -> String {
         use Value::*;
         let mut res = String::new();

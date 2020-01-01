@@ -18,6 +18,30 @@ pub struct ProtoX{
 }
 
 impl ProtoX{
+    pub fn new()->Self{
+        ProtoX{
+            d:0,
+            dot:false,
+            var:false,
+            exs:Vec::new(),
+            params:None,
+        }
+    }
+
+    pub fn push(mut self,s:&str)->Self{
+        self.exs.push(Expr::Val(Value::Str(s.to_string())));
+        self
+            
+    }
+    pub fn dot(mut self)->Self{
+        self.dot = true;
+        self
+    }
+
+    pub fn deref(mut self,n:i32)->Self{
+        self.d += n;
+        self
+    }
     pub fn push_param(&mut self, e:Expr){
         if let Some(ref mut p) = self.params{
             p.push(e); 
@@ -25,19 +49,45 @@ impl ProtoX{
         }
         self.params = Some(vec![e]);
     }
+
+    pub fn eval_expr(&self, scope:&Scope)->Result<Value,ActionError>{
+        match scope.on_wrap(|wrap| self.eval_mut(wrap)) {
+            Ok(None)=>Err(ActionError::new("Expr did not return a value")),
+            Ok(Some(v))=>Ok(v),
+            Err(e)=>Err(e),
+        }
+    }
     
-    pub fn eval(&self, scope: &Scope) -> Result<Option<Value>, ActionError> {
+    pub fn eval_mut(&self, scope: &mut Scope) -> Result<Option<Value>, ActionError> {
         let mut proto = Proto::new().deref(self.d);
         if self.dot { proto = proto.dot()}
         if self.var { proto = proto.var()}
-        for e in self.exs {
-            proto.push_val(e.eval(scope)?);
+        for e in &self.exs {
+            proto.push_val(e.eval(scope)?)?;
         }
 
+        let param_vals = match &self.params {
+            Some(pp) => {
+                let mut res = Vec::new();
+                for p in pp {
+                    res.push(p.eval(scope)?);
+                }
+                Some(res)
+            }
+            _=>None,
+        };
+
+        if let Some(apf) = proto.as_api_func_name(){
+            if let Some(ref pv) = param_vals{
+                if let Some(res) = api_funcs::run_api_expr(apf,scope,pv){
+                    return res;
+                }
+            }
+        }
         //resolve proto to value
         let mut derefs = proto.derefs;
 
-        let mut val = None;
+        let mut val = None  ;
         while derefs > 0{
             match scope.get(&proto){
                 Some(Value::Proto(np)) => {
@@ -45,45 +95,31 @@ impl ProtoX{
                     proto = np.with_set_deref(derefs);
                 },
                 Some(v) => {
-                    return Ok(Some(v.clone()));
+                    val = Some(v.clone());
+                    break;
                 }
                 None =>{
                     return Err(ActionError::new("proto points to nothing"));
                 }
             }
         }
-        match val {
-            Some(Value::FuncDef(pnames,actions))=>if let Some(pv) = self.params{
-                let mut params = Vec::new();
-                for p in pv{
-                    params.push(p.eval(scope)?);
-                }
-                match proto.as_func_name() {
-                    "d" => return api_funcs::d(self, &params),
-                    "foreach" => return api_funcs::for_each(self, params),
-                    "fold" => return api_funcs::fold(self, params),
-                    "load" => return api_funcs::load(self, params),
-                    "link" => return api_funcs::link(self, params),
-                    "if" => return api_funcs::if_expr(self, params),
-                    _ => {}
-                }
-                scope
-                    .run_func(&pnames,&actions, &params)?
-                    .ok_or(ActionError::new("func in expr returns no value"))
-            }else {
-
-            }
-            Some(Value::ExprDef(e))=> if let Some(pv) = self.params{// has brackets
-                return e.eval(scope);
-            }else {return Ok(Value::ExprDef(e))}
-            Some(v) => v,
-
+        if val.is_none() {
+            return Ok(Some(Value::Proto(proto)));
         }
-        if let Some(pv) = self.params(){
-            params = Vec::new();
-            for p in pv{
-                params.push(p.eval(scope)?);
+        match val {
+            Some(Value::FuncDef(pnames,actions))=>if let Some(ref pv) = param_vals{
+                scope
+                    .run_func(&pnames,&actions, pv)
+            }else {
+                Ok(Some(Value::FuncDef(pnames.clone(),actions.clone())))
+
             }
+            Some(Value::ExprDef(e))=> if let Some(ref _pv) = self.params{// has brackets
+                e.eval(scope).map(|v| Some(v))
+            }else {return Ok(Some(Value::ExprDef(e.clone())))}
+            Some(r)=>Ok(Some(r.clone())),
+            None => Ok(None),
+
         }
            
     }
@@ -124,7 +160,6 @@ impl ProtoX{
                 Some(Token::Dot)=>{},
                 Some(Token::BracketO) => {
                     res.params = Some(Vec::new());
-                    let mut params = Vec::new();
                     while let Some(tk) = t.next() {
                         match tk {
                             Token::BracketC => return Ok(res),

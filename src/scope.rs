@@ -2,7 +2,7 @@ use crate::action::Action;
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::parse::ActionReader;
-use crate::proto::{Proto, ProtoNode};
+use crate::proto::Proto;
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
 use std::path::Path;
@@ -74,6 +74,18 @@ impl Scope {
                 Parent::None => None,
             }
         }
+    }
+
+    pub fn on_wrap<F, T>(&self, f: F) -> T
+    where
+        F: FnOnce(&mut Scope) -> T,
+    {
+        let mut wrap = Scope {
+            base: None,
+            data: Value::tree(),
+            parent: Parent::Const(self as *const Scope),
+        };
+        f(&mut wrap)
     }
 
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
@@ -152,7 +164,6 @@ impl Scope {
             data: Value::tree(),
             parent: Parent::Mut(self as *mut Scope),
         };
-
 
         for p in 0..params.len() {
             if pnames.len() > p {
@@ -233,57 +244,55 @@ impl Scope {
         };
         match a {
             Action::Select(proto_op) => {
-                if let Some(proto) = proto_op {
-                    match self.get(&proto) {
-                        Some(_) => {}
-                        _ => {
-                            self.set(&proto, Value::tree())
-                                .map_err(|_| err("count not Create object for selct"))?;
-                        }
+                println!("Select");
+                if let Some(px) = proto_op {
+                    let nbase = px.eval_expr(self)?.as_proto()?.clone();
+                    if self.get(&nbase).is_none(){
+                        self.set(&nbase,Value::tree())?;
                     }
-                    self.base = Some(self.in_context(&proto)?);
-                    return Ok(None);
+                    self.base = Some(nbase);
+                }else {
+                    self.base = None;
                 }
-                self.base = None;
             }
             Action::Set(px, v) => {
-                let proto = px.eval(self)?;
-                self.set(&proto, v.eval(self)?)
+                let pv = px.eval_expr(self)?;
+                let proto = pv.as_proto()?;
+                self.set(proto, v.eval(self)?)
                     .map_err(|_| err("Could not Set"))?;
             }
-            Action::Add(proto, v) => {
-                match self.get(&proto) {
+            Action::Add(px, v) => {
+                let pv = px.eval_expr(self)?;
+                let proto = pv.as_proto()?;
+                match self.get(proto) {
                     Some(ov) => {
                         let nv = ov.clone().try_add(v.eval(self)?)?;
-                        self.set(&proto, nv).map_err(|_| err("Could not Add"))?;
+                        self.set(proto, nv).map_err(|_| err("Could not Add"))?;
                     }
                     None => {
-                        self.set(&proto, v.eval(self)?)
-                            .map_err(|_| err("Coult not add"))?;
+                        self.set(proto, v.eval(self)?)
+                            .map_err(|_| err("Could not add"))?;
                     }
                 }
-            }
-            Action::Sub(proto, v) => {
-                match self.get(&proto) {
+            },
+            Action::Sub(px, v) =>{
+                let pv = px.eval_expr(self)?;
+                let proto = pv.as_proto()?;
+                match self.get(proto) {
                     Some(ov) => {
                         let nv = ov.clone().try_sub(v.eval(self)?)?;
-                        self.set(&proto, nv).map_err(|_| err("Could not sub"))?;
+                        self.set(proto, nv).map_err(|_| err("Could not sub"))?;
                     }
                     None => {
-                        self.set(&proto, Expr::neg(v.clone()).eval(self)?)
+                        self.set(proto, Expr::neg(v.clone()).eval(self)?)
                             .map_err(|_| err("Coult not sub"))?;
                     }
                 }
-            }
+            },
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
-            Action::CallFunc(proto, params) => {
-                let mut nparams = Vec::new();
-                for p in params {
-                    nparams.push(p.eval(&self)?);
-                }
-                match self.get(&proto){
-                }
-                return self.call_func_mut(proto.clone(), &nparams);
+            Action::Proto(px) => {
+
+                return px.clone().deref(1).eval_mut(self);
             }
         };
         Ok(None)

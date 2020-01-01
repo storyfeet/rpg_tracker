@@ -73,7 +73,8 @@ impl Expr {
                 }
                 t
             }
-            ProtoEx(p) => p.eval(scope)?,
+            ProtoEx(p) => p.eval_expr(scope)?,
+            Op(_)=>return Err(ActionError::new("Operator not a complete expression")),
         })
     }
 
@@ -123,6 +124,10 @@ impl Expr {
                 }
             }
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
+            Token::Ident(_) | Token::Dot| Token::Dollar => {
+                it.back();
+                return Ok(Expr::ProtoEx(ProtoX::from_tokens(it)?));
+            }
             _ => {
                 it.back();
                 return Ok(Expr::Val(Value::from_tokens(it)?));

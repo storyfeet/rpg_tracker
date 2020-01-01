@@ -1,17 +1,16 @@
 use crate::error::LineError;
 use crate::expr::Expr;
 use crate::prev_iter::{Backer, LineCounter};
-use crate::proto::Proto;
 use crate::proto_ex::ProtoX;
 use crate::token::{TokPrev, Token};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    Select(Option<Proto>),
+    Select(Option<ProtoX>),
     Add(ProtoX, Expr),
     Sub(ProtoX, Expr),
     Set(ProtoX, Expr),
-    CallFunc(ProtoX, Vec<Expr>),
+    Proto(ProtoX),
     Expr(Expr),
 }
 
@@ -31,36 +30,22 @@ impl Action {
             .map_err(|p| p.set_line(t.line()))?
             .to_string();
         match sign {
-            Token::Add => Ok(Action::Add(Proto::one(&id, true), Expr::num(n))),
-            Token::Sub => Ok(Action::Sub(Proto::one(&id, true), Expr::num(n))),
+            Token::Add => Ok(Action::Add(ProtoX::new().push(&id).dot(), Expr::num(n))),
+            Token::Sub => Ok(Action::Sub(ProtoX::new().push(&id).dot(), Expr::num(n))),
             _ => Err(t.err("Not Addable")),
         }
     }
 
-    pub fn from_proto(p: Proto, t: &mut TokPrev) -> Result<Action, LineError> {
+    pub fn from_proto(p: ProtoX, t: &mut TokPrev) -> Result<Action, LineError> {
         match t.next() {
-            None | Some(Token::Break) => Ok(Action::Expr(Expr::proto(p.with_deref(1)))),
+            None | Some(Token::Break) => Ok(Action::Proto(p)),
             Some(Token::Colon) => Ok(Action::Select(Some(p))),
             Some(Token::Equals) => Ok(Action::Set(p, Expr::from_tokens(t)?)),
             Some(Token::Add) => Ok(Action::Add(p, Expr::from_tokens(t)?)),
             Some(Token::Sub) => Ok(Action::Sub(p, Expr::from_tokens(t)?)),
-            Some(Token::BracketO) => {
-                let mut params = Vec::new();
-                while let Some(tk) = t.next() {
-                    match tk {
-                        Token::Comma => {}
-                        Token::BracketC => return Ok(Action::CallFunc(p, params)),
-                        _ => {
-                            t.back();
-                            params.push(Expr::from_tokens(t)?);
-                        }
-                    }
-                }
-                return Err(t.eof());
-            }
             _ => {
                 t.back();
-                Ok(Action::Expr(Expr::proto(p)))
+                Ok(Action::Expr(Expr::ProtoEx(p)))
             } //e => Err(t.ux(e, "after ident")),
         }
     }
@@ -72,9 +57,9 @@ impl Action {
                 return Self::from_tokens(t);
             }
             Token::Colon => Ok(Action::Select(None)),
-            Token::Dollar | Token::Dot | Token::Ident(_) | Token::Qoth(_) => {
+            Token::Dollar | Token::Dot | Token::Ident(_) => {
                 t.back();
-                let p = ProtoEx::from_tokens(t)?;
+                let p = ProtoX::from_tokens(t)?;
                 //println!("PROTO from_tokens= {:?}",p);
                 Self::from_proto(p, t)
             }

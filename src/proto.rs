@@ -1,6 +1,6 @@
-use std::fmt::{Display, Formatter};
-use crate::value::Value;
 use crate::error::ActionError;
+use crate::value::Value;
+use std::fmt::{Display, Formatter};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProtoNode {
@@ -13,10 +13,10 @@ impl ProtoNode {
         ProtoNode::Str(s.to_string())
     }
 
-    pub fn as_string(&self)->String{
-        match self{
-            ProtoNode::Num(n)=>n.to_string(),
-            ProtoNode::Str(s)=>s.clone(),
+    pub fn as_string(&self) -> String {
+        match self {
+            ProtoNode::Num(n) => n.to_string(),
+            ProtoNode::Str(s) => s.clone(),
         }
     }
 }
@@ -25,7 +25,7 @@ impl ProtoNode {
 pub struct Proto {
     pub dotted: bool,
     pub derefs: i32,
-    pub var:bool,
+    pub var: bool,
     v: Vec<ProtoNode>,
 }
 
@@ -53,38 +53,41 @@ impl Display for Proto {
 impl Proto {
     pub fn new() -> Self {
         Proto {
-            dotted:false,
+            dotted: false,
             derefs: 0,
-            var:false,
+            var: false,
             v: Vec::new(),
         }
     }
     pub fn one(s: &str) -> Self {
         Proto {
-            dotted:false,
-            var:false,
+            dotted: false,
+            var: false,
             v: vec![ProtoNode::str(s)],
             derefs: 0,
         }
     }
 
-    pub fn dot(self) ->Self{
+    pub fn dot(mut self) -> Self {
         self.dotted = true;
         self
     }
-    pub fn var(self) -> Self {
+    pub fn var(mut self) -> Self {
         self.var = true;
         self
     }
-    pub fn deref(self, n:i32)->Self{
+    pub fn deref(mut self, n: i32) -> Self {
         self.derefs += n;
         self
     }
 
-    pub fn as_func_name(&self)->&str{
-        match self.v.get(0){
-            Some(ProtoNode::Str(s))=>s,
-            _=>"",
+    pub fn as_api_func_name(&self) -> Option<&str> {
+        if self.v.len() > 1 {
+            return None;
+        }
+        match self.v.get(0) {
+            Some(ProtoNode::Str(s)) => Some(s),
+            _ => None,
         }
     }
 
@@ -103,16 +106,13 @@ impl Proto {
         res
     }
 
-
-
-    pub fn push_val(&mut self, v: Value)->Result<(),ActionError> {
+    pub fn push_val(&mut self, v: Value) -> Result<(), ActionError> {
         match v {
-            Value::Str(s)=>self.v.push(ProtoNode::Str(s)),
-            Value::Num(n)=>self.v.push(ProtoNode::Num(n)),
-            e=>return Err(ActionError::new("proto parts must resolve to str or num"))
+            Value::Str(s) => self.v.push(ProtoNode::Str(s)),
+            Value::Num(n) => self.v.push(ProtoNode::Num(n)),
+            _ => return Err(ActionError::new("proto parts must resolve to str or num")),
         }
         Ok(())
-
     }
 
     pub fn pp<'a>(&'a self) -> ProtoP<'a> {
@@ -148,7 +148,7 @@ impl Proto {
 
 #[derive(Clone, Debug)]
 pub struct ProtoP<'a> {
-    p:&'a Proto,
+    p: &'a Proto,
     pos: usize,
     stop: usize,
 }
@@ -173,7 +173,7 @@ impl<'a> ProtoP<'a> {
         self.p.v.len() - self.pos
     }
 
-    pub fn var(&self)->bool{
+    pub fn var(&self) -> bool {
         self.p.var
     }
     pub fn parent(&self) -> Self {
