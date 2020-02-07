@@ -1,6 +1,6 @@
 use failure_derive::*;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Fail, PartialEq)]
 #[fail(display = "Parse Error: line {} :{}", line, mess)]
 pub struct LineError {
     mess: String,
@@ -31,7 +31,7 @@ impl LineError {
     }
 }
 
-#[derive(Debug, Fail, Clone)]
+#[derive(Debug, Fail, Clone, PartialEq)]
 #[fail(display = "Action Error: {}", mess)]
 pub struct ActionError {
     mess: String,

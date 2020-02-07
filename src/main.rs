@@ -2,6 +2,7 @@ mod action;
 mod api_funcs;
 mod error;
 mod expr;
+mod nomp;
 mod parse;
 mod prev_iter;
 mod proto;

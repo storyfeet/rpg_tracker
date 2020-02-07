@@ -8,6 +8,7 @@ edition = "2018"
 
 [dependencies]
 
+nom="5.1.0"
 clap_conf = {path="../../mlibs/clap_conf"}
 serde = "1.0.103"
 serde_derive = "1.0.103"
