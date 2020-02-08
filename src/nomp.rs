@@ -6,8 +6,9 @@ use nom::multi::separated_list;
 use nom::sequence::*;
 use nom::{error::ErrorKind, IResult};
 
-use crate::expr::Expr;
-use crate::proto_ex::ProtoX;
+use std::collections::BTreeMap;
+
+use crate::expr::{Expr, Op};
 use crate::value::Value;
 
 pub fn n_ident(s: &str) -> IResult<&str, &str> {
@@ -39,6 +40,13 @@ pub fn n_num(s: &str) -> IResult<&str, i32> {
     }
 }
 
+pub fn d_expr_def(s:&str)->IResult<&str,Value>{ 
+    map(tuple(
+            (w_tag("expr"),delimited(w_tag("("), r_expr, w_tag(")")))),
+        |(_,e)|Value::ExprDef(Box::new(e))
+    )(s)
+}
+
 pub fn d_func_def(s: &str) -> IResult<&str, Value> {
     //TODO include actual function actions
     let sep = delimited(space0, tag(","), space0);
@@ -64,45 +72,54 @@ pub fn d_value(s: &str) -> IResult<&str, Value> {
         map(n_bool, |v| Value::Bool(v)),
         map(n_qoth, |v| Value::Str(v.to_string())), //TODO escape
         map(n_num, |v| Value::Num(v)),
+        d_func_def ,
+        d_expr_def,
     ))(s)
 }
 
-/*pub fn op<F, FR>(s: &str, f: F) -> impl Fn(&str) -> IResult<&str, Expr>
-where
-    FR: Fn(&str) -> IResult<&str, Expr>,
-    F: Fn(&str) -> FR,
-{
-}*/
 
-/*pub fn w_tag(s: &str) -> impl Fn(&str) -> IResult<&str, &str> {
-    delimited(space0, tag(s), space0)
-}*/
+pub fn w_tag(t: &'static str) -> impl Fn(&str) -> IResult<&str, ()> {
+    move |s| map(tuple((space0, tag(t), space0)), |_| ())(s)
+}
 
 pub fn e_neg(s: &str) -> IResult<&str, Expr> {
     map(tuple((tag("-"), r_expr)), |(_, e)| Expr::Neg(Box::new(e)))(s)
 }
 
 pub fn e_bracket(s: &str) -> IResult<&str, Expr> {
-    delimited(tag("("), r_expr, tag(")"))(s)
+    map(delimited(w_tag("("), r_expr, w_tag(")")), |e| {
+        Expr::Bracket(Box::new(e))
+    })(s)
+}
+pub fn e_map(s: &str) -> IResult<&str, Expr> {
+    let colons = tuple((n_ident, w_tag(":"), r_expr));
+    map(
+        delimited(w_tag("["), separated_list(w_tag(","), colons), w_tag("]")),
+        |l| {
+            let mut res = BTreeMap::new();
+            for (n, _, v) in l {
+                res.insert(n.to_string(), v);
+            }
+            Expr::Map(res)
+        },
+    )(s)
 }
 
-pub fn oper<F: 'static + Fn(Expr, Expr) -> Expr>(
-    op: &'static str,
-    f: F,
-) -> impl Fn(&str) -> IResult<&str, Expr> + '_ {
-    move |s| map(tuple((l_expr, tag(op), r_expr)), |(a, _, b)| f(a, b))(s)
+pub fn e_list(s: &str) -> IResult<&str, Expr> {
+    map(
+        delimited(w_tag("["), separated_list(w_tag(","), r_expr), w_tag("]")),
+        |l| Expr::List(l),
+    )(s)
 }
 
 //right expr try to parse biggest thing first
 pub fn r_expr(s: &str) -> IResult<&str, Expr> {
     alt((
-        oper("+",|a,b|Expr::Add(Box::new(a),Box::new(b))),
-        oper("-",|a,b|Expr::Sub(Box::new(a),Box::new(b))),
-        oper("*",|a,b|Expr::Mul(Box::new(a),Box::new(b))),
-        oper("/",|a,b|Expr::Div(Box::new(a),Box::new(b))),
-        map(d_value, |v| Expr::Val(v)),
-        e_bracket,
-        e_neg,
+        map(
+            tuple((l_expr, delimited(space0, one_of("+-*/<>="), space0), r_expr)),
+            |(l, o, r)| r.add_left(l, Op::from_char(o)),
+        ),
+        l_expr,
     ))(s)
 }
 
@@ -111,11 +128,9 @@ pub fn l_expr(s: &str) -> IResult<&str, Expr> {
     alt((
         e_neg,
         e_bracket,
+        e_list,
+        e_map,
         map(d_value, |v| Expr::Val(v)),
-        oper("/",|a,b|Expr::Div(Box::new(a),Box::new(b))),
-        oper("*",|a,b|Expr::Mul(Box::new(a),Box::new(b))),
-        oper("-",|a,b|Expr::Sub(Box::new(a),Box::new(b))),
-        oper("+",|a,b|Expr::Add(Box::new(a),Box::new(b))),
     ))(s)
 }
 
@@ -163,18 +178,17 @@ mod nom_test {
         assert!(d_func_def("fn(fish green pink)").is_err());
     }
 
-    fn part_eval(s:&str)->Value{
+    fn part_eval(s: &str) -> Value {
         let sc = Scope::new();
         let e = r_expr(s).unwrap().1;
         e.eval(&sc).unwrap()
-
     }
     #[test]
-    fn test_eval_expr(){
-        assert_eq!(part_eval("3+4"),Value::Num(7));
-        assert_eq!(part_eval("3+4*5"),Value::Num(23));
-        assert_eq!(part_eval("5*3+4"),Value::Num(19));
-        assert_eq!(part_eval("3*(4+5)"),Value::Num(27));
-
+    fn test_eval_expr() {
+        assert_eq!(part_eval("3+4"), Value::Num(7));
+        assert_eq!(part_eval("3+4*5"), Value::Num(23));
+        assert_eq!(part_eval("5*3+4"), Value::Num(19));
+        assert_eq!(part_eval("3*(4+5)"), Value::Num(27));
+        assert_eq!(part_eval("3 * ( 4 + 5 ) "), Value::Num(27));
     }
 }
