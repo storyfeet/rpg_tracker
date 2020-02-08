@@ -16,6 +16,7 @@ pub enum Expr {
     Sub(Box<Expr>, Box<Expr>),
     Div(Box<Expr>, Box<Expr>),
     Mul(Box<Expr>, Box<Expr>),
+    Bracket(Box<Expr>),
     Less(Box<Expr>, Box<Expr>),
     Greater(Box<Expr>, Box<Expr>),
     Equal(Box<Expr>, Box<Expr>),
@@ -55,6 +56,7 @@ impl Expr {
             Sub(a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Mul(a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Div(a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
+            Bracket(a) => a.eval(scope)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
             Greater(a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Less(a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
@@ -74,7 +76,7 @@ impl Expr {
                 t
             }
             ProtoEx(p) => p.eval_expr(scope)?,
-            Op(_)=>return Err(ActionError::new("Operator not a complete expression")),
+            Op(_) => return Err(ActionError::new("Operator not a complete expression")),
         })
     }
 
@@ -124,7 +126,7 @@ impl Expr {
                 }
             }
             Token::Sub => return Ok(Expr::neg(Expr::from_tokens(it)?)),
-            Token::Ident(_) | Token::Dot| Token::Dollar => {
+            Token::Ident(_) | Token::Dot | Token::Dollar => {
                 it.back();
                 return Ok(Expr::ProtoEx(ProtoX::from_tokens(it)?));
             }
@@ -219,7 +221,7 @@ mod test_expr {
     fn test_expr_results() {
         let scope = Scope::new();
         let r: Expr = "(5 + 2)".parse().unwrap();
-        assert_eq!(r.eval(&scope),Ok(Value::Num( 7)));
+        assert_eq!(r.eval(&scope), Ok(Value::Num(7)));
 
         let r: Expr = "(5 +2 *2)".parse().unwrap();
         assert_eq!(r.eval(&scope), Ok(Value::Num(9)));
