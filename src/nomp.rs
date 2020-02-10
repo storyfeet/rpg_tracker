@@ -40,10 +40,10 @@ pub fn n_num(s: &str) -> IResult<&str, i32> {
     }
 }
 
-pub fn d_expr_def(s:&str)->IResult<&str,Value>{ 
-    map(tuple(
-            (w_tag("expr"),delimited(w_tag("("), r_expr, w_tag(")")))),
-        |(_,e)|Value::ExprDef(Box::new(e))
+pub fn d_expr_def(s: &str) -> IResult<&str, Value> {
+    map(
+        tuple((w_tag("expr"), delimited(w_tag("("), r_expr, w_tag(")")))),
+        |(_, e)| Value::ExprDef(Box::new(e)),
     )(s)
 }
 
@@ -72,11 +72,10 @@ pub fn d_value(s: &str) -> IResult<&str, Value> {
         map(n_bool, |v| Value::Bool(v)),
         map(n_qoth, |v| Value::Str(v.to_string())), //TODO escape
         map(n_num, |v| Value::Num(v)),
-        d_func_def ,
+        d_func_def,
         d_expr_def,
     ))(s)
 }
-
 
 pub fn w_tag(t: &'static str) -> impl Fn(&str) -> IResult<&str, ()> {
     move |s| map(tuple((space0, tag(t), space0)), |_| ())(s)
@@ -116,12 +115,13 @@ pub fn e_list(s: &str) -> IResult<&str, Expr> {
 pub fn r_expr(s: &str) -> IResult<&str, Expr> {
     alt((
         map(
-            tuple((l_expr, delimited(space0, one_of("+-*/<>="), space0), r_expr)),
+            tuple((
+                l_expr,
+                delimited(space0, one_of(".+-*/<>="), space0),
+                r_expr,
+            )),
             |(l, o, r)| r.add_left(l, Op::from_char(o)),
         ),
-        map(tuple((l_expr, tag("."),r_expr)),
-            |(l,o,r)| 
-        )
         l_expr,
     ))(s)
 }

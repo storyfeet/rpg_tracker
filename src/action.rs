@@ -12,6 +12,7 @@ pub enum Action {
     Set(ProtoX, Expr),
     Proto(ProtoX),
     Expr(Expr),
+    Declare(ProtoX, Expr),
 }
 
 impl Action {
@@ -37,21 +38,12 @@ impl Action {
     }
 
     pub fn from_proto(p: ProtoX, t: &mut TokPrev) -> Result<Action, LineError> {
-        match t.next() {
-            None | Some(Token::Break) => Ok(Action::Proto(p)),
-            Some(Token::Colon) => Ok(Action::Select(Some(p))),
-            Some(Token::Equals) => Ok(Action::Set(p, Expr::from_tokens(t)?)),
-            Some(Token::Add) => Ok(Action::Add(p, Expr::from_tokens(t)?)),
-            Some(Token::Sub) => Ok(Action::Sub(p, Expr::from_tokens(t)?)),
-            _ => {
-                t.back();
-                Ok(Action::Expr(Expr::ProtoEx(p)))
-            } //e => Err(t.ux(e, "after ident")),
-        }
+        unimplemented!();
     }
 
     pub fn from_tokens(t: &mut TokPrev) -> Result<Action, LineError> {
-        match t.next().ok_or(t.eof())? {
+        unimplemented!();
+        /*match t.next().ok_or(t.eof())? {
             Token::Hash => {
                 t.read_to_break();
                 return Self::from_tokens(t);
@@ -70,7 +62,7 @@ impl Action {
                 t.back();
                 Ok(Action::Expr(Expr::from_tokens(t)?))
             }
-        }
+        }*/
     }
 
     //if the function should be added to the

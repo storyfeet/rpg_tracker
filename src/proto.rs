@@ -23,20 +23,11 @@ impl ProtoNode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
-    pub dotted: bool,
-    pub derefs: i32,
-    pub var: bool,
     v: Vec<ProtoNode>,
 }
 
 impl Display for Proto {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        for _ in 0..self.derefs {
-            write!(f, "$")?;
-        }
-        if self.dotted {
-            write!(f, ".")?;
-        }
         for (i, node) in self.v.iter().enumerate() {
             if i != 0 {
                 write!(f, ".")?;
@@ -53,43 +44,28 @@ impl Display for Proto {
 impl Proto {
     pub fn new() -> Self {
         Proto {
-            dotted: false,
-            derefs: 0,
-            var: false,
             v: Vec::new(),
         }
     }
 
-    pub fn join(a: Value, b: Value) -> Self {
-        match a {
-            Value::Proto(ap) => {
-                ap.push(b);
-                ap
-            }
-        }
+    pub fn join(a: Value, b: Value) -> Result<Self, ActionError>{
+        let ap = match a {
+            Value::Proto(ap) => ap,
+            Value::Str(s)=>Proto{ v:vec![ProtoNode::Str(s)]},
+            Value::Num(n)=>Proto{ v:vec![ProtoNode::Num(n)]},
+            _=>return Err(ActionError::new("Cannot add non string/num to Proto")),
+        };
+        ap.push_val(b)?;
+        Ok(ap)
     }
 
     pub fn one(s: &str) -> Self {
         Proto {
-            dotted: false,
-            var: false,
             v: vec![ProtoNode::str(s)],
-            derefs: 0,
         }
     }
 
-    pub fn dot(mut self) -> Self {
-        self.dotted = true;
-        self
-    }
-    pub fn var(mut self) -> Self {
-        self.var = true;
-        self
-    }
-    pub fn deref(mut self, n: i32) -> Self {
-        self.derefs += n;
-        self
-    }
+    
 
     pub fn as_api_func_name(&self) -> Option<&str> {
         if self.v.len() > 1 {
@@ -101,12 +77,6 @@ impl Proto {
         }
     }
 
-    pub fn join_on_dot(&self, p: Self) -> Self {
-        if !p.dotted {
-            return p;
-        }
-        self.extend_new(p.pp())
-    }
 
     pub fn parent(&self) -> Self {
         let mut res = self.clone();
@@ -118,6 +88,7 @@ impl Proto {
 
     pub fn push_val(&mut self, v: Value) -> Result<(), ActionError> {
         match v {
+            Value::Proto(pp) => self.v.extend(pp.v),
             Value::Str(s) => self.v.push(ProtoNode::Str(s)),
             Value::Num(n) => self.v.push(ProtoNode::Num(n)),
             _ => return Err(ActionError::new("proto parts must resolve to str or num")),
@@ -140,18 +111,6 @@ impl Proto {
     pub fn extend_new(&self, pp: ProtoP) -> Self {
         let mut res = self.clone();
         res.extend(pp);
-        res
-    }
-
-    pub fn with_deref(&self, n: i32) -> Proto {
-        let mut res = self.clone();
-        res.derefs += n;
-        res
-    }
-
-    pub fn with_set_deref(&self, n: i32) -> Proto {
-        let mut res = self.clone();
-        res.derefs = n;
         res
     }
 }
@@ -183,9 +142,6 @@ impl<'a> ProtoP<'a> {
         self.p.v.len() - self.pos
     }
 
-    pub fn var(&self) -> bool {
-        self.p.var
-    }
     pub fn parent(&self) -> Self {
         let mut res = self.clone();
         if res.stop >= 1 {

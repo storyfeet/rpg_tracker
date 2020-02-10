@@ -17,6 +17,7 @@ pub enum Value {
     Tree(BTreeMap<String, Value>),
     ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
+    Deref(Box<Value>),
     Proto(Proto),
 }
 
@@ -150,7 +151,7 @@ impl Value {
                 }
                 //TODO cover list
                 Value::Proto(p) => {
-                    return SetResult::Deref(p.extend_new(pp).with_deref(1), v);
+                    return SetResult::Deref(p.extend_new(pp), v);
                 }
                 _ => return SetResult::Err(ActionError::new("Cannot set child of a non tree")),
             }
@@ -172,7 +173,7 @@ impl Value {
                     }
                 },
                 Value::Proto(p) => {
-                    return SetResult::Deref(p.extend_new(pp).with_deref(1), v);
+                    return SetResult::Deref(p.extend_new(pp), v);//TODO make sure the set result gets the deref somehow
                 }
                 _ => return SetResult::Err(ActionError::new("canot set child of non tree")),
             },

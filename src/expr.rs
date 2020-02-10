@@ -3,12 +3,12 @@ use crate::error::{ActionError, LineError};
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
 //use crate::proto_ex::ProtoX;
+use crate::nomp::r_expr;
 use crate::scope::Scope;
 use crate::token::TokPrev;
 use crate::value::Value;
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use crate::nomp::r_expr;
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Op {
@@ -39,7 +39,7 @@ impl Op {
     pub fn rank(&self) -> i32 {
         use Op::*;
         match self {
-            Dot=>11,
+            Dot => 11,
             Add => 10,
             Sub => 9,
             Mul => 8,
@@ -50,10 +50,10 @@ impl Op {
         }
     }
 
-    pub fn char(&self)->char{
+    pub fn char(&self) -> char {
         use Op::*;
         match self {
-            Dot=> '.',
+            Dot => '.',
             Add => '+',
             Sub => '-',
             Mul => '*',
@@ -71,16 +71,18 @@ pub enum Expr {
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
+    PreDot(Box<Expr>),
     List(Vec<Expr>),
     Map(BTreeMap<String, Expr>),
-    Call(Box<Expr>,Vec<Expr>), //Also covers call func
+    Call(Box<Expr>, Vec<Expr>), //Also covers call func
 }
 
 impl FromStr for Expr {
     type Err = LineError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        r_expr(s).map(|(_,a)|a).map_err(|_|LineError::new("could not make Expr from str",0))
-
+        r_expr(s)
+            .map(|(_, a)| a)
+            .map_err(|_| LineError::new("could not make Expr from str", 0))
     }
 }
 
@@ -123,7 +125,7 @@ impl Expr {
                 }
                 t
             }
-            Oper(Op::Dot,a,b) => Proto::join(a.eval(scope)?,b.eval(scope)?),
+            Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
         })
     }
 
@@ -131,7 +133,7 @@ impl Expr {
         match self {
             Expr::Oper(sop, sa, sb) => {
                 if sop.rank() >= op.rank() {
-                    Expr::Oper(sop, Box::new(sa.add_left(lf,op)), sb)
+                    Expr::Oper(sop, Box::new(sa.add_left(lf, op)), sb)
                 } else {
                     Expr::Oper(op, Box::new(lf), Box::new(Expr::Oper(sop, sa, sb)))
                 }
@@ -144,9 +146,9 @@ impl Expr {
         use Expr::*;
         match self {
             Val(v) => v.print(0),
-            Oper(o, a, b) => format!("{}{}{})", a.print(),o.char(), b.print()),
+            Oper(o, a, b) => format!("{}{}{})", a.print(), o.char(), b.print()),
             Neg(a) => format!("-{}", a.print()),
-            Bracket(b) => format!("({})",b.print()),
+            Bracket(b) => format!("({})", b.print()),
             e => format!("{:?}", e),
         }
     }
