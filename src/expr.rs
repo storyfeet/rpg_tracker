@@ -2,7 +2,7 @@ use crate::error::{ActionError, LineError};
 //use crate::prev_iter::Backer;
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
-use crate::proto_ex::ProtoX;
+//use crate::proto_ex::ProtoX;
 use crate::scope::Scope;
 use crate::token::TokPrev;
 use crate::value::Value;
@@ -18,6 +18,7 @@ pub enum Op {
     Mul,
     Greater,
     Less,
+    Dot,
     Equal,
 }
 
@@ -31,12 +32,14 @@ impl Op {
             '*' => Mul,
             '>' => Greater,
             '<' => Less,
+            '.' => Dot,
             _ => Equal,
         }
     }
     pub fn rank(&self) -> i32 {
         use Op::*;
         match self {
+            Dot=>11,
             Add => 10,
             Sub => 9,
             Mul => 8,
@@ -50,6 +53,7 @@ impl Op {
     pub fn char(&self)->char{
         use Op::*;
         match self {
+            Dot=> '.',
             Add => '+',
             Sub => '-',
             Mul => '*',
@@ -69,7 +73,7 @@ pub enum Expr {
     Neg(Box<Expr>),
     List(Vec<Expr>),
     Map(BTreeMap<String, Expr>),
-    ProtoEx(ProtoX), //Also covers call func
+    Call(Box<Expr>,Vec<Expr>), //Also covers call func
 }
 
 impl FromStr for Expr {
@@ -119,7 +123,7 @@ impl Expr {
                 }
                 t
             }
-            ProtoEx(p) => p.eval_expr(scope)?,
+            Oper(Op::Dot,a,b) => Proto::join(a.eval(scope)?,b.eval(scope)?),
         })
     }
 

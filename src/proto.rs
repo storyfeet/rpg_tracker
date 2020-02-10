@@ -59,6 +59,16 @@ impl Proto {
             v: Vec::new(),
         }
     }
+
+    pub fn join(a: Value, b: Value) -> Self {
+        match a {
+            Value::Proto(ap) => {
+                ap.push(b);
+                ap
+            }
+        }
+    }
+
     pub fn one(s: &str) -> Self {
         Proto {
             dotted: false,

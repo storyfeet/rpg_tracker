@@ -119,6 +119,9 @@ pub fn r_expr(s: &str) -> IResult<&str, Expr> {
             tuple((l_expr, delimited(space0, one_of("+-*/<>="), space0), r_expr)),
             |(l, o, r)| r.add_left(l, Op::from_char(o)),
         ),
+        map(tuple((l_expr, tag("."),r_expr)),
+            |(l,o,r)| 
+        )
         l_expr,
     ))(s)
 }
