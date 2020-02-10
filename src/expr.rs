@@ -71,7 +71,7 @@ pub enum Expr {
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    PreDot(Box<Expr>),
+    eDot(Box<Expr>),
     List(Vec<Expr>),
     Map(BTreeMap<String, Expr>),
     Call(Box<Expr>, Vec<Expr>), //Also covers call func

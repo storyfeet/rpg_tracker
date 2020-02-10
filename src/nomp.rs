@@ -61,7 +61,7 @@ pub fn d_func_def(s: &str) -> IResult<&str, Value> {
                     v.push(s.to_string());
                     v
                 }),
-                Vec::new(),
+                Vec::new()
             ),
         )
     })
@@ -77,21 +77,47 @@ pub fn d_value(s: &str) -> IResult<&str, Value> {
     ))(s)
 }
 
-pub fn w_tag(t: &'static str) -> impl Fn(&str) -> IResult<&str, ()> {
-    move |s| map(tuple((space0, tag(t), space0)), |_| ())(s)
+
+/*pub fn wsp<'a,F,O,E>(f:F)->impl Fn(&'a str)->IResult<&'a str,O,E>
+    where //I:Clone+nom::InputLength+nom::InputIter+nom::InputTake,//+nom::UnspecializedInput,
+          //<I as nom::InputIter>::Item: nom::AsChar+Clone,
+          F:Fn(I)->IResult<I,O,E>,
+          E:nom::error::ParseError<&'a str>,
+{
+    //wrap(space0,f)
+    move |s:&str| wrap(space0,f)(s)
+}*/
+
+/*pub fn w_tag<'a, T:'a,I:'a,O,E>(t:T) -> impl Fn(I) -> IResult<I, O,E>
+    where I:Clone+nom::InputLength+nom::InputIter+nom::InputTake + nom::Compare<T>+nom::UnspecializedInput,
+          T:nom::InputLength + Clone,
+          <I as nom::InputIter>::Item: nom::AsChar+Clone,
+{
+    move |s:I|wrap(space0,tag(t))(s)
+    //move |s| map(tuple((space0, tag(t), space0)), |_| ())(s)
+}
+*/
+
+pub fn w_tag<'a>(t:&'static str)->impl Fn(&str)-> IResult<&str,()>{
+    move |s:&str|map(wrap(space0,tag(t)),|_|())(s)
 }
 
 pub fn e_neg(s: &str) -> IResult<&str, Expr> {
-    map(tuple((tag("-"), r_expr)), |(_, e)| Expr::Neg(Box::new(e)))(s)
+    map(tuple((wrap(space0,tag("-")), r_expr)), |(_, e)| Expr::Neg(Box::new(e)))(s)
+}
+pub fn e_dot(s: &str) -> IResult<&str, Expr> {
+    map(tuple((wrap(space0,tag(".")), r_expr)), |(_, e)| Expr::Dot(Box::new(e)))(s)
 }
 
 pub fn e_bracket(s: &str) -> IResult<&str, Expr> {
-    map(delimited(w_tag("("), r_expr, w_tag(")")), |e| {
+    map(delimited(wrap(space0,tag("(")), r_expr, wrap(space0,tag(")"))), |e| {
         Expr::Bracket(Box::new(e))
     })(s)
 }
+
 pub fn e_map(s: &str) -> IResult<&str, Expr> {
-    let colons = tuple((n_ident, w_tag(":"), r_expr));
+
+    let colons = tuple((n_ident, wrap(space0,tag(":")), r_expr));
     map(
         delimited(w_tag("["), separated_list(w_tag(","), colons), w_tag("]")),
         |l| {
@@ -106,9 +132,30 @@ pub fn e_map(s: &str) -> IResult<&str, Expr> {
 
 pub fn e_list(s: &str) -> IResult<&str, Expr> {
     map(
-        delimited(w_tag("["), separated_list(w_tag(","), r_expr), w_tag("]")),
+        delimited(wrap(space0,tag("[")), separated_list(wrap(space0,tag(",")), r_expr), wrap(space0,tag("]"))),
         |l| Expr::List(l),
     )(s)
+}
+
+pub fn wrap<W,F,I,O,O2,E>(fw:W,fm:F)->impl Fn(I)->IResult<I,O,E>
+    where W:Fn(I)->IResult<I,O2,E>,
+          F:Fn(I)->IResult<I,O,E>,
+          E:nom::error::ParseError<I>,
+          I:Clone,
+{
+    map(tuple((fw,fm,fw)),|(_,r,_)|r)
+}
+
+
+
+pub fn e_op(s:&str)->IResult<&str,Op>{
+    wrap(space0,
+        alt((
+            map(tag("=="),|_|Op::Equal),
+            map(one_of(".+-*/><"),|c| Op::from_char(c)),
+        ))
+    )(s)
+
 }
 
 //right expr try to parse biggest thing first
@@ -117,10 +164,10 @@ pub fn r_expr(s: &str) -> IResult<&str, Expr> {
         map(
             tuple((
                 l_expr,
-                delimited(space0, one_of(".+-*/<>="), space0),
+                e_op,
                 r_expr,
             )),
-            |(l, o, r)| r.add_left(l, Op::from_char(o)),
+            |(l, o, r)| r.add_left(l, o),
         ),
         l_expr,
     ))(s)
@@ -130,6 +177,7 @@ pub fn r_expr(s: &str) -> IResult<&str, Expr> {
 pub fn l_expr(s: &str) -> IResult<&str, Expr> {
     alt((
         e_neg,
+        e_dot,
         e_bracket,
         e_list,
         e_map,
