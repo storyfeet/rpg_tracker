@@ -3,10 +3,10 @@ use crate::error::{ActionError, LineError};
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
 //use crate::proto_ex::ProtoX;
-use crate::nomp::r_expr;
 use crate::scope::Scope;
 use crate::token::TokPrev;
 use crate::value::Value;
+use gobble::err::ParseError;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
@@ -22,20 +22,25 @@ pub enum Op {
     Equal,
 }
 
-impl Op {
-    pub fn from_char(c: char) -> Self {
+impl FromStr for Op {
+    type Err = ParseError;
+    fn from_str(s: &str) -> Result<Self, ParseError> {
         use Op::*;
-        match c {
-            '+' => Add,
-            '-' => Sub,
-            '/' => Div,
-            '*' => Mul,
-            '>' => Greater,
-            '<' => Less,
-            '.' => Dot,
-            _ => Equal,
-        }
+        Ok(match s {
+            "+" => Add,
+            "-" => Sub,
+            "/" => Div,
+            "*" => Mul,
+            ">" => Greater,
+            "<" => Less,
+            "." => Dot,
+            "==" => Equal,
+            _ => return Err(ParseError::new("not a legit operator", 0)),
+        })
     }
+}
+
+impl Op {
     pub fn rank(&self) -> i32 {
         use Op::*;
         match self {
@@ -50,17 +55,17 @@ impl Op {
         }
     }
 
-    pub fn char(&self) -> char {
+    pub fn to_str(&self) -> &str {
         use Op::*;
         match self {
-            Dot => '.',
-            Add => '+',
-            Sub => '-',
-            Mul => '*',
-            Div => '/',
-            Greater => '>',
-            Less => '<',
-            Equal => '=',
+            Dot => ".",
+            Add => "+",
+            Sub => "-",
+            Mul => "*",
+            Div => "/",
+            Greater => ">",
+            Less => "<",
+            Equal => "==",
         }
     }
 }
@@ -71,18 +76,17 @@ pub enum Expr {
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    eDot(Box<Expr>),
     List(Vec<Expr>),
+    Ref(Box<Expr>),
     Map(BTreeMap<String, Expr>),
-    Call(Box<Expr>, Vec<Expr>), //Also covers call func
+    Call(Box<Expr>, Vec<Expr>),
 }
 
+use gobble::ptrait::*;
 impl FromStr for Expr {
-    type Err = LineError;
+    type Err = ParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        r_expr(s)
-            .map(|(_, a)| a)
-            .map_err(|_| LineError::new("could not make Expr from str", 0))
+        crate::nomp::parse_expr.parse(&s.chars()).map(|(r, e)| e)
     }
 }
 
@@ -92,9 +96,6 @@ impl Expr {
     }
     pub fn neg(e: Expr) -> Self {
         Expr::Neg(Box::new(e))
-    }
-    pub fn proto(p: Proto) -> Self {
-        Expr::Val(Value::Proto(p))
     }
 
     pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {

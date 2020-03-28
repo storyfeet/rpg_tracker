@@ -12,9 +12,6 @@ mod screen;
 mod token;
 mod value;
 
-#[macro_use]
-extern crate nom;
-
 use scope::Scope;
 use std::io::Write;
 use std::path::Path;

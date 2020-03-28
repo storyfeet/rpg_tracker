@@ -13,12 +13,12 @@ pub enum Value {
     Bool(bool),
     Num(i32),
     Str(String),
+    Ident(String),
     List(Vec<Value>),
     Tree(BTreeMap<String, Value>),
     ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
     Deref(Box<Value>),
-    Proto(Proto),
 }
 
 pub enum SetResult {
@@ -42,13 +42,6 @@ impl Value {
         Value::Str(s.to_string())
     }
 
-    pub fn as_proto(&self) -> Result<&Proto, ActionError> {
-        match self {
-            Value::Proto(p) => Ok(p),
-            _ => Err(ActionError::new("Cannot treat non proto as proto")),
-        }
-    }
-
     pub fn print(&self, depth: usize) -> String {
         use Value::*;
         let mut res = String::new();
@@ -65,9 +58,6 @@ impl Value {
                     res.push(':');
                     res.push_str(&v.print(depth + 1));
                 }
-            }
-            Proto(p) => {
-                res.push_str(&p.to_string());
             }
             ExprDef(ex) => {
                 res.push_str(&ex.print());
@@ -173,7 +163,7 @@ impl Value {
                     }
                 },
                 Value::Proto(p) => {
-                    return SetResult::Deref(p.extend_new(pp), v);//TODO make sure the set result gets the deref somehow
+                    return SetResult::Deref(p.extend_new(pp), v); //TODO make sure the set result gets the deref somehow
                 }
                 _ => return SetResult::Err(ActionError::new("canot set child of non tree")),
             },
