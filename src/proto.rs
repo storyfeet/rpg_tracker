@@ -43,17 +43,19 @@ impl Display for Proto {
 
 impl Proto {
     pub fn new() -> Self {
-        Proto {
-            v: Vec::new(),
-        }
+        Proto { v: Vec::new() }
     }
 
-    pub fn join(a: Value, b: Value) -> Result<Self, ActionError>{
+    pub fn join(a: Value, b: Value) -> Result<Self, ActionError> {
         let ap = match a {
             Value::Proto(ap) => ap,
-            Value::Str(s)=>Proto{ v:vec![ProtoNode::Str(s)]},
-            Value::Num(n)=>Proto{ v:vec![ProtoNode::Num(n)]},
-            _=>return Err(ActionError::new("Cannot add non string/num to Proto")),
+            Value::Str(s) => Proto {
+                v: vec![ProtoNode::Str(s)],
+            },
+            Value::Num(n) => Proto {
+                v: vec![ProtoNode::Num(n)],
+            },
+            _ => return Err(ActionError::new("Cannot add non string/num to Proto")),
         };
         ap.push_val(b)?;
         Ok(ap)
@@ -65,8 +67,6 @@ impl Proto {
         }
     }
 
-    
-
     pub fn as_api_func_name(&self) -> Option<&str> {
         if self.v.len() > 1 {
             return None;
@@ -76,7 +76,6 @@ impl Proto {
             _ => None,
         }
     }
-
 
     pub fn parent(&self) -> Self {
         let mut res = self.clone();

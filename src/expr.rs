@@ -71,14 +71,23 @@ impl Op {
 }
 
 #[derive(PartialEq, Clone, Debug)]
+pub struct EList<E>(pub Option<Box<(E, EList<E>)>>);
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct MapItem {
+    k: String,
+    v: Expr,
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Val(Value),
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    List(Vec<Expr>),
+    List(EList<Expr>),
     Ref(Box<Expr>),
-    Map(BTreeMap<String, Expr>),
+    Map(EList<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
 }
 
@@ -88,6 +97,25 @@ impl FromStr for Expr {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         crate::nomp::parse_expr.parse(&s.chars()).map(|(r, e)| e)
     }
+}
+
+fn eval_list_expr(l: &EList<Expr>, v: &mut Vec<Value>, sc: &Scope) -> Result<(), ActionError> {
+    if let Some(b) = l.0 {
+        v.push(b.0.eval(sc)?);
+        (b.1, v, sc);
+    }
+    Ok(())
+}
+fn eval_map_expr(
+    l: &EList<MapItem>,
+    v: &mut BTreeMap<String, Value>,
+    sc: &Scope,
+) -> Result<(), ActionError> {
+    if let Some(b) = l.0 {
+        v.insert(b.0.k, b.0.v.eval(sc)?);
+        (b.1, v, sc);
+    }
+    Ok(())
 }
 
 impl Expr {
@@ -112,19 +140,15 @@ impl Expr {
             Oper(Op::Greater, a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Oper(Op::Less, a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
-            List(l) => {
+            List(ref l) => {
                 let mut vl = Vec::new();
-                for e in l {
-                    vl.push(e.eval(scope)?);
-                }
+                eval_list_expr(l, &mut vl, scope)?;
                 Value::List(vl)
             }
-            Map(m) => {
-                let mut t = Value::tree();
-                for (k, v) in m.iter() {
-                    t.set_at_path(Proto::one(k).pp(), v.eval(scope)?);
-                }
-                t
+            Map(ref l) => {
+                let mut t = BTreeMap::new();
+                eval_map_expr(l, &mut t, scope)?;
+                Value::Map(t)
             }
             Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
         })

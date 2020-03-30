@@ -1,37 +1,19 @@
-use crate::error::LineError;
-use crate::expr::Expr;
-use crate::proto_ex::ProtoX;
-use crate::token::{TokPrev, Token};
-
+use crate::expr::{Expr, Op};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    Select(Option<ProtoX>),
-    Add(Expr, Expr),
-    Sub(Expr, Expr),
+    Select(Expr),
+    Display(Expr),
+    OpSet(Op, Expr, Expr),
     Set(Expr, Expr),
-    Proto(Expr),
-    Expr(Expr),
     Declare(Expr, Expr),
 }
 
 impl Action {
-    pub fn from_add_sub(sign: Token, t: &mut TokPrev) -> Result<Action, LineError> {
-        unimplemented!();
-    }
-
-    pub fn from_proto(p: ProtoX, t: &mut TokPrev) -> Result<Action, LineError> {
-        unimplemented!();
-    }
-
-    pub fn from_tokens(t: &mut TokPrev) -> Result<Action, LineError> {
-        unimplemented!();
-    }
-
-    //if the function should be added to the
+    //if the function should be added to the history file?
     pub fn is_fileworthy(&self) -> bool {
         match self {
-            Action::Expr(_) => false,
+            Action::Display(_) => false,
             _ => true,
         }
     }

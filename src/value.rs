@@ -14,8 +14,9 @@ pub enum Value {
     Num(i32),
     Str(String),
     Ident(String),
+    Proto(Proto),
     List(Vec<Value>),
-    Tree(BTreeMap<String, Value>),
+    Map(BTreeMap<String, Value>),
     ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
     Deref(Box<Value>),
@@ -34,8 +35,8 @@ impl From<usize> for Value {
 }
 
 impl Value {
-    pub fn tree() -> Self {
-        Value::Tree(BTreeMap::new())
+    pub fn map() -> Self {
+        Value::Map(BTreeMap::new())
     }
 
     pub fn str(s: &str) -> Self {
@@ -48,7 +49,7 @@ impl Value {
         match self {
             Bool(b) => res.push_str(&b.to_string()),
             Num(n) => res.push_str(&n.to_string()),
-            Tree(t) => {
+            Map(t) => {
                 for (k, v) in t {
                     res.push('\n');
                     for _ in 0..depth {
@@ -84,7 +85,7 @@ impl Value {
 
     pub fn has_child(&self, s: &str) -> bool {
         match self {
-            Value::Tree(t) => t.get(s).is_some(),
+            Value::Map(t) => t.get(s).is_some(),
             _ => false,
         }
     }
@@ -96,7 +97,7 @@ impl Value {
         match pp.next() {
             None => Some(self),
             Some(p) => match self {
-                Value::Tree(mp) => match mp.get(&p.as_string()) {
+                Value::Map(mp) => match mp.get(&p.as_string()) {
                     Some(ch) => return ch.get_path(pp),
                     None => None,
                 },
@@ -114,6 +115,13 @@ impl Value {
         }
     }
 
+    pub fn as_proto(&self) -> Result<&Proto, ActionError> {
+        if let Value::Proto(p) = self {
+            return Ok(p);
+        }
+        Err(ActionError::new("not a proto"))
+    }
+
     ///lifetime issues means to get proto for get_mut you can't follow proto
     /// this is probably actually correct as a mutable property on
     /// an object shouldn't come from a proto
@@ -121,7 +129,7 @@ impl Value {
         match pp.next() {
             None => Some(self),
             Some(p) => match self {
-                Value::Tree(ref mut mp) => {
+                Value::Map(ref mut mp) => {
                     if let Some(ch) = mp.get_mut(&p.as_string()) {
                         return ch.get_path_mut(pp);
                     }
@@ -135,7 +143,7 @@ impl Value {
     pub fn set_at_path<'a>(&'a mut self, mut pp: ProtoP, mut v: Value) -> SetResult {
         if pp.remaining() == 1 {
             match self {
-                Value::Tree(t) => {
+                Value::Map(t) => {
                     let rv = t.insert(pp.next().unwrap().as_string(), v);
                     return SetResult::Ok(rv);
                 }
@@ -153,7 +161,7 @@ impl Value {
                 SetResult::Ok(Some(v))
             }
             Some(p) => match self {
-                Value::Tree(mp) => match mp.get_mut(&p.as_string()) {
+                Value::Map(mp) => match mp.get_mut(&p.as_string()) {
                     Some(ch) => return ch.set_at_path(pp, v),
                     None => {
                         let mut t = Value::tree();
@@ -222,10 +230,10 @@ impl Value {
                 List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
                 v => Ok(List(a.into_iter().filter(|x| *x != v).collect())),
             },
-            Tree(mut t) => match rhs {
+            Map(mut t) => match rhs {
                 Str(s) => {
                     t.remove(&s);
-                    Ok(Tree(t))
+                    Ok(Map(t))
                 }
                 _ => Err(ActionError::new("Can only sub str from tree")),
             },
@@ -373,7 +381,7 @@ impl<'a> Iterator for VIter<'a> {
     type Item = Value;
     fn next(&mut self) -> Option<Self::Item> {
         match self.v {
-            Value::Tree(_) => {
+            Value::Map(_) => {
                 return None;
             }
             Value::List(l) => {

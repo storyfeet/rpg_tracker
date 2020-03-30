@@ -27,7 +27,7 @@ enum Parent {
 impl Scope {
     pub fn new() -> Scope {
         Scope {
-            data: Value::tree(),
+            data: Value::map(),
             base: None,
             parent: Parent::None,
         }
@@ -82,7 +82,7 @@ impl Scope {
     {
         let mut wrap = Scope {
             base: None,
-            data: Value::tree(),
+            data: Value::map(),
             parent: Parent::Const(self as *const Scope),
         };
         f(&mut wrap)
@@ -91,7 +91,7 @@ impl Scope {
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
         let mut wrap = Scope {
             base: None,
-            data: Value::tree(),
+            data: Value::map(),
             parent: Parent::Const(self as *const Scope),
         };
         ex.eval(&mut wrap)
@@ -113,7 +113,7 @@ impl Scope {
         };
         let mut scope = Scope {
             base: None,
-            data: Value::tree(),
+            data: Value::map(),
             parent: Parent::Mut(self as *mut Scope),
         };
 
@@ -161,7 +161,7 @@ impl Scope {
     ) -> Result<Option<Value>, ActionError> {
         let mut scope = Scope {
             base: None,
-            data: Value::tree(),
+            data: Value::map(),
             parent: Parent::Mut(self as *mut Scope),
         };
 
@@ -247,11 +247,11 @@ impl Scope {
                 println!("Select");
                 if let Some(px) = proto_op {
                     let nbase = px.eval_expr(self)?.as_proto()?.clone();
-                    if self.get(&nbase).is_none(){
-                        self.set(&nbase,Value::tree())?;
+                    if self.get(&nbase).is_none() {
+                        self.set(&nbase, Value::map())?;
                     }
                     self.base = Some(nbase);
-                }else {
+                } else {
                     self.base = None;
                 }
             }
@@ -274,8 +274,8 @@ impl Scope {
                             .map_err(|_| err("Could not add"))?;
                     }
                 }
-            },
-            Action::Sub(px, v) =>{
+            }
+            Action::Sub(px, v) => {
                 let pv = px.eval_expr(self)?;
                 let proto = pv.as_proto()?;
                 match self.get(proto) {
@@ -288,10 +288,9 @@ impl Scope {
                             .map_err(|_| err("Coult not sub"))?;
                     }
                 }
-            },
+            }
             Action::Expr(e) => return Ok(Some(e.eval(self)?)),
             Action::Proto(px) => {
-
                 return px.clone().deref(1).eval_mut(self);
             }
         };
