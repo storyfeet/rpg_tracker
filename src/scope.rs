@@ -1,7 +1,7 @@
 use crate::action::Action;
 use crate::error::ActionError;
 use crate::expr::Expr;
-use crate::parse::ActionReader;
+use crate::nomp::p_action;
 use crate::proto::Proto;
 use crate::value::{SetResult, Value};
 use std::fmt::Debug;
@@ -37,28 +37,35 @@ impl Scope {
         self.data
     }
 
+    pub fn handle_input(&mut self, s: &str) -> Result<(), ActionError> {
+        let mut ss = s.chars();
+        loop {
+            match p_action(&ss) {
+                Ok((ns, a)) => {
+                    ss = ns;
+                    match self.do_action(&a) {
+                        //TODO consider writing file
+                        Ok(Some(v)) => {
+                            println!("{}", v.print(0));
+                        }
+                        Ok(None) => {}
+                        Err(e) => println!("Error {}", e),
+                    }
+                }
+                Err(e) => println!("Error {}", e),
+            }
+        }
+    }
+
     pub fn from_file<P: AsRef<Path> + Debug>(fname: P) -> Result<Self, ActionError> {
         let mut res = Scope::new();
         res.run_file(fname)?;
         Ok(res)
     }
+
     pub fn run_file<P: AsRef<Path> + Debug>(&mut self, fname: P) -> Result<(), ActionError> {
         let fs = std::fs::read_to_string(&fname).map_err(|e| ActionError::new(&e.to_string()))?;
-        let r = ActionReader::new(&fs);
-
-        for a in r {
-            let a = match a {
-                Ok(v) => v,
-                Err(e) => {
-                    println!("Error {}", e);
-                    continue;
-                }
-            };
-            if let Err(e) = self.do_action(&a.action) {
-                println!("Error {} at {}", e, a.line)
-            }
-        }
-        Ok(())
+        self.handle_input(&fs)
     }
 
     pub fn get(&self, p: &Proto) -> Option<&Value> {
@@ -222,18 +229,14 @@ impl Scope {
     }
 
     pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
-        //println!("in context p = {}",p);
-        match p.dotted {
-            false => Ok(p.clone()),
-            true => match self.base.as_ref() {
-                Some(b) => Ok(b.extend_new(p.pp())),
-                None => unsafe {
-                    match self.parent {
-                        Parent::Const(par) => (&*par).in_context(p),
-                        Parent::Mut(par) => (&*par).in_context(p),
-                        Parent::None => Err(ActionError::new("Cannot find context for '.'")),
-                    }
-                },
+        match self.base.as_ref() {
+            Some(b) => Ok(b.extend_new(p.pp())),
+            None => unsafe {
+                match self.parent {
+                    Parent::Const(par) => (&*par).in_context(p),
+                    Parent::Mut(par) => (&*par).in_context(p),
+                    Parent::None => Err(ActionError::new("Cannot find context for '.'")),
+                }
             },
         }
     }

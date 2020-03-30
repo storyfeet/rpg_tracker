@@ -1,4 +1,5 @@
 use failure_derive::*;
+use gobble::err::ParseError;
 
 #[derive(Debug, Fail, PartialEq)]
 #[fail(display = "Parse Error: line {} :{}", line, mess)]
@@ -32,15 +33,22 @@ impl LineError {
 }
 
 #[derive(Debug, Fail, Clone, PartialEq)]
-#[fail(display = "Action Error: {}", mess)]
-pub struct ActionError {
-    mess: String,
+#[fail(Display)]
+pub enum ActionError {
+    #[fail(display = "Parse Error: {}", 0)]
+    ParseErr(ParseError),
+    #[fail(display = "Action Error: {}", 0)]
+    DoingErr(String),
 }
 
 impl ActionError {
     pub fn new(s: &str) -> Self {
-        ActionError {
-            mess: s.to_string(),
-        }
+        ActionError::DoingErr(s.to_string())
+    }
+}
+
+impl From<ParseError> for ActionError {
+    fn from(p: ParseError) -> ActionError {
+        ActionError::ParseErr(p)
     }
 }

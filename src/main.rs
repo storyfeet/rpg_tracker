@@ -3,10 +3,8 @@ mod api_funcs;
 mod error;
 mod expr;
 mod nomp;
-mod parse;
 mod prev_iter;
 mod proto;
-mod proto_ex;
 mod scope;
 mod screen;
 mod token;
@@ -50,30 +48,9 @@ fn main() -> Result<(), failure::Error> {
 
     loop {
         let mut input = String::new();
-        std::io::stdin().read_line(&mut input)?;
-        if input == "quit\n" {
-            return Ok(());
-        }
-
-        for a in parse::ActionReader::new(&input) {
-            //println!("--action--{:?}", a);
-            match a {
-                Ok(ac) => match scope.do_action(&ac.action) {
-                    Ok(Some(v)) => {
-                        if ac.action.is_fileworthy() {
-                            write_action(&fname, &input)?;
-                        }
-                        println!("{}", v.print(0));
-                    }
-                    Ok(None) => {
-                        if ac.action.is_fileworthy() {
-                            write_action(&fname, &input)?;
-                        }
-                    }
-                    Err(e) => println!("Error {}", e),
-                },
-                Err(e) => println!("Error {}", e),
-            }
+        match std::io::stdin().read_line(&mut input) {
+            Ok(0) => return Ok(()),
+            _ => {}
         }
     }
 }

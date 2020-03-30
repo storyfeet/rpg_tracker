@@ -3,10 +3,11 @@ use crate::expr::{Expr, Op};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Select(Expr),
-    Display(Expr),
     OpSet(Op, Expr, Expr),
     Set(Expr, Expr),
-    Declare(Expr, Expr),
+    AddItem(i32, String),
+    RemItem(i32, String),
+    Display(Expr),
 }
 
 impl Action {

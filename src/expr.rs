@@ -2,7 +2,6 @@ use crate::error::{ActionError, LineError};
 //use crate::prev_iter::Backer;
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
-//use crate::proto_ex::ProtoX;
 use crate::scope::Scope;
 use crate::token::TokPrev;
 use crate::value::Value;
@@ -85,18 +84,11 @@ pub enum Expr {
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    List(EList<Expr>),
+    Dot(Box<Expr>),
     Ref(Box<Expr>),
+    List(EList<Expr>),
     Map(EList<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
-}
-
-use gobble::ptrait::*;
-impl FromStr for Expr {
-    type Err = ParseError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        crate::nomp::parse_expr.parse(&s.chars()).map(|(r, e)| e)
-    }
 }
 
 fn eval_list_expr(l: &EList<Expr>, v: &mut Vec<Value>, sc: &Scope) -> Result<(), ActionError> {
@@ -131,15 +123,17 @@ impl Expr {
         use Expr::*;
         Ok(match self {
             Val(n) => n.clone(),
+            Bracket(a) => a.eval(scope)?,
+            Neg(a) => a.eval(scope)?.try_neg()?,
             Oper(Op::Add, a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
             Oper(Op::Sub, a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Oper(Op::Mul, a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Oper(Op::Div, a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
-            Bracket(a) => a.eval(scope)?,
-            Neg(a) => a.eval(scope)?.try_neg()?,
             Oper(Op::Greater, a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Oper(Op::Less, a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
+            Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
+            Dot(a) => Value::Proto(scope.in_context(a.eval(scope)?.as_proto()?)?),
             List(ref l) => {
                 let mut vl = Vec::new();
                 eval_list_expr(l, &mut vl, scope)?;
@@ -171,7 +165,7 @@ impl Expr {
         use Expr::*;
         match self {
             Val(v) => v.print(0),
-            Oper(o, a, b) => format!("{}{}{})", a.print(), o.char(), b.print()),
+            Oper(o, a, b) => format!("{}{}{})", a.print(), o.to_str(), b.print()),
             Neg(a) => format!("-{}", a.print()),
             Bracket(b) => format!("({})", b.print()),
             e => format!("{:?}", e),

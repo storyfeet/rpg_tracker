@@ -13,8 +13,7 @@ pub enum Value {
     Bool(bool),
     Num(i32),
     Str(String),
-    Ident(String),
-    Proto(Proto),
+    Ident(Proto),
     List(Vec<Value>),
     Map(BTreeMap<String, Value>),
     ExprDef(Box<Expr>),
@@ -91,7 +90,7 @@ impl Value {
     }
 
     pub fn get_path<'a>(&'a self, pp: &mut ProtoP) -> Option<&'a Value> {
-        if let Value::Proto(_) = self {
+        if let Value::Ident(_) = self {
             return Some(self);
         };
         match pp.next() {
@@ -115,11 +114,13 @@ impl Value {
         }
     }
 
-    pub fn as_proto(&self) -> Result<&Proto, ActionError> {
-        if let Value::Proto(p) = self {
-            return Ok(p);
+    pub fn as_proto(&self) -> Result<Proto, ActionError> {
+        match self {
+            Value::Ident(p) => Ok(p.clone()),
+            Value::Num(n) => Ok(Proto::num(*n)),
+            Value::Str(s) => Ok(Proto::one(s)),
+            _ => Err(ActionError::new("not a proto")),
         }
-        Err(ActionError::new("not a proto"))
     }
 
     ///lifetime issues means to get proto for get_mut you can't follow proto

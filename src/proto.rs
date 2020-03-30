@@ -67,6 +67,12 @@ impl Proto {
         }
     }
 
+    pub fn num(n: i32) -> Self {
+        Proto {
+            v: vec![ProtoNode::Num(n)],
+        }
+    }
+
     pub fn as_api_func_name(&self) -> Option<&str> {
         if self.v.len() > 1 {
             return None;
