@@ -1,9 +1,10 @@
 use crate::action::Action;
+use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::nomp::p_action;
 use crate::proto::Proto;
-use crate::value::{SetResult, Value};
+use crate::value::Value;
 use std::fmt::Debug;
 use std::path::Path;
 
@@ -12,29 +13,27 @@ use std::path::Path;
 
 #[derive(Debug)]
 pub struct Scope {
-    data: Value,
-    base: Option<Proto>,
-    parent: Parent,
-}
-
-#[derive(Debug)]
-enum Parent {
-    Mut(*mut Scope),
-    Const(*const Scope),
-    None,
+    base: Vec<GenData>,
+    gm: GenManager,
 }
 
 impl Scope {
-    pub fn new() -> Scope {
+    pub fn new(gm: GenManager) -> Scope {
         Scope {
-            data: Value::map(),
-            base: None,
-            parent: Parent::None,
+            base: vec![gm.push(Value::map())],
+            gm,
         }
     }
 
-    pub fn eat_data(self) -> Value {
-        self.data
+    pub fn on_wrap<F, T>(&mut self, f: F) -> T
+    where
+        F: FnOnce(&mut Scope) -> T,
+    {
+        self.base.push(self.gm.push(Value::map()));
+        let res = f(&mut self);
+        let b = self.base.pop().unwrap();
+        self.gm.dec_rc(b);
+        res
     }
 
     pub fn handle_input(&mut self, s: &str) -> Result<(), ActionError> {
@@ -46,7 +45,7 @@ impl Scope {
                     match self.do_action(&a) {
                         //TODO consider writing file
                         Ok(Some(v)) => {
-                            println!("{}", v.print(0));
+                            println!("{}", v.print(0, &self.gm));
                         }
                         Ok(None) => {}
                         Err(e) => println!("Error {}", e),
@@ -57,18 +56,16 @@ impl Scope {
         }
     }
 
-    pub fn from_file<P: AsRef<Path> + Debug>(fname: P) -> Result<Self, ActionError> {
-        let mut res = Scope::new();
-        res.run_file(fname)?;
-        Ok(res)
-    }
-
     pub fn run_file<P: AsRef<Path> + Debug>(&mut self, fname: P) -> Result<(), ActionError> {
         let fs = std::fs::read_to_string(&fname).map_err(|e| ActionError::new(&e.to_string()))?;
         self.handle_input(&fs)
     }
 
-    pub fn get(&self, p: &Proto) -> Option<&Value> {
+    pub fn as_ref(&self, p: Proto) -> Option<&GenData> {
+        let ref = self.base()
+        for pp in p.pp() {
+
+        }
         let pc = self.in_context(p).ok()?; // CONSIDER: make fn return result
                                            //var with name exists
         if let Some(v) = self.data.get_path(&mut pc.pp()) {
@@ -83,25 +80,8 @@ impl Scope {
         }
     }
 
-    pub fn on_wrap<F, T>(&self, f: F) -> T
-    where
-        F: FnOnce(&mut Scope) -> T,
-    {
-        let mut wrap = Scope {
-            base: None,
-            data: Value::map(),
-            parent: Parent::Const(self as *const Scope),
-        };
-        f(&mut wrap)
-    }
-
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
-        let mut wrap = Scope {
-            base: None,
-            data: Value::map(),
-            parent: Parent::Const(self as *const Scope),
-        };
-        ex.eval(&mut wrap)
+        self.on_wrap(|sc|ex.eval(sc))
     }
 
     pub fn for_each<T, IT>(
@@ -114,81 +94,34 @@ impl Scope {
         Value: From<T>,
         IT: Iterator<Item = (T, Value)>,
     {
-        let (pnames, actions) = match func {
-            Value::FuncDef(pnames, actions) => (pnames, actions),
-            _ => return Err(ActionError::new("foreach requires a func def")),
-        };
-        let mut scope = Scope {
-            base: None,
-            data: Value::map(),
-            parent: Parent::Mut(self as *mut Scope),
-        };
-
-        let fold_name = if pnames.len() > 2 { &pnames[2] } else { "fold" };
-
-        if let Some(f) = fold {
-            scope.set_param(fold_name, f);
-        }
-
-        for (k, v) in it {
-            match pnames.len() {
-                0 => {
-                    scope.set_param("k", Value::from(k));
-                    scope.set_param("v", v);
-                }
-                1 => {
-                    scope.set_param(&pnames[0], v);
-                }
-                _ => {
-                    scope.set_param(&pnames[0], Value::from(k));
-                    scope.set_param(&pnames[1], v);
-                }
-            }
-
-            for a in &actions {
-                let done = scope.do_action(a);
-                match done {
-                    Ok(Some(v)) => {
-                        scope.set_param(fold_name, v);
-                        break;
-                    }
-                    Err(e) => return Err(e),
-                    Ok(None) => {}
-                }
-            }
-        }
-        Ok(scope.get(&Proto::one(fold_name)).map(|v| v.clone()))
+        unimplemented!()
     }
 
     pub fn run_func(
         &mut self,
         pnames: &[String],
         actions: &[Action],
-        params: &[Value],
+        params: Vec<Value>,
     ) -> Result<Option<Value>, ActionError> {
-        let mut scope = Scope {
-            base: None,
-            data: Value::map(),
-            parent: Parent::Mut(self as *mut Scope),
-        };
-
-        for p in 0..params.len() {
-            if pnames.len() > p {
-                scope.set_param(&pnames[p], params[p].clone());
-            }
-        }
-
-        for a in actions {
-            let done = scope.do_action(a);
-            match done {
-                Ok(Some(v)) => {
-                    return Ok(Some(v));
+        self.on_wrap(|sc|{
+            for p in 0..params.len() {
+                if pnames.len() > p {
+                    sc.set_param(&pnames[p], params[p]);
                 }
-                Err(e) => return Err(e),
-                Ok(None) => {}
             }
-        }
-        Ok(None)
+            for a in actions {
+                let done = sc.do_action(a);
+                match done {
+                    Ok(Some(v)) => {
+                        return Ok(Some(v));
+                    }
+                    Err(e) => return Err(e),
+                    Ok(None) => {}
+                }
+            }
+            Ok(None)
+        })
+
     }
 
     pub fn set_param(&mut self, k: &str, v: Value) {
@@ -242,7 +175,7 @@ impl Scope {
             ActionError::new(s)
         };
         match a {
-            Action::Select(proto_op) => {
+            Action::Select(ex) => {
                 println!("Select");
                 if let Some(px) = proto_op {
                     let nbase = px.eval_expr(self)?.as_proto()?.clone();

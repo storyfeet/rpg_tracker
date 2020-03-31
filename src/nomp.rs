@@ -59,9 +59,6 @@ fn p_value<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Value> {
     if let Ok((r, v)) = tag("\"").ig_then(esc('"', '\\').e_map('t', '\t')).parse(&r) {
         return Ok((r, Value::Str(v)));
     }
-    if let Ok((r, v)) = p_ident(&r) {
-        return Ok((r, Value::Ident(v)));
-    }
 
     return Err(ParseError::new("No value parseable", 0));
 }
@@ -127,6 +124,9 @@ fn p_expr_l<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Expr> {
     }
     if let Ok((ir, l)) = tag("[").ig_then(p_list).then_ig(tag("]")).parse(&i2) {
         return Ok((ir, Expr::List(l)));
+    }
+    if let Ok((ir, v)) = p_ident(&i2) {
+        return Ok((ir, Expr::Ident(v)));
     }
     Err(ParseError::new("Expr Left fail", 0))
 }

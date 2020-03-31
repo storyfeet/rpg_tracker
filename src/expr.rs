@@ -3,7 +3,6 @@ use crate::error::{ActionError, LineError};
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
 use crate::scope::Scope;
-use crate::token::TokPrev;
 use crate::value::Value;
 use gobble::err::ParseError;
 use std::collections::BTreeMap;
@@ -72,20 +71,20 @@ impl Op {
 #[derive(PartialEq, Clone, Debug)]
 pub struct EList<E>(pub Option<Box<(E, EList<E>)>>);
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Debug)]
 pub struct MapItem {
     k: String,
     v: Expr,
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Expr {
     Val(Value),
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    Dot(Box<Expr>),
     Ref(Box<Expr>),
+    Ident(String),
     List(EList<Expr>),
     Map(EList<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
@@ -118,6 +117,17 @@ impl Expr {
         Expr::Neg(Box::new(e))
     }
 
+    pub fn eval_path(&self,sc: &Scope)->Result<Proto,ActionError>{
+        use Expr::*;
+        Ok(match self{
+            Val(Value::Num(n))=>Proto::num(*n),
+            Val(Value::Str(s))=>Proto::one(s),
+            Ident(s)=>Proto::one(s),
+            Oper(Op::Dot,a,b)=>a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
+            _=>return Err(ActionError::new("Could not treat as proto" )),
+        })
+    }
+
     pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
         //println!("eval {}",self.print());
         use Expr::*;
@@ -132,8 +142,10 @@ impl Expr {
             Oper(Op::Greater, a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
             Oper(Op::Less, a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
-            Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
-            Dot(a) => Value::Proto(scope.in_context(a.eval(scope)?.as_proto()?)?),
+            Oper(Op::Dot, a, b) => {
+                let proto = self.eval_path(scope);
+                Value::Proto
+            }
             List(ref l) => {
                 let mut vl = Vec::new();
                 eval_list_expr(l, &mut vl, scope)?;
@@ -144,6 +156,7 @@ impl Expr {
                 eval_map_expr(l, &mut t, scope)?;
                 Value::Map(t)
             }
+            Ident(s) => let p Value::Proto(Proto::one(s)),
             Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
         })
     }
