@@ -1,13 +1,13 @@
 mod action;
 mod api_funcs;
+mod ecs_ish;
 mod error;
 mod expr;
 mod nomp;
-mod prev_iter;
+//mod prev_iter;
 mod proto;
 mod scope;
-mod screen;
-mod token;
+//mod screen;
 mod value;
 
 use scope::Scope;
@@ -42,9 +42,9 @@ fn main() -> Result<(), failure::Error> {
         scope.run_file(name)?;
     }
 
-    if !clp.is_present("nogui") {
+    /*    if !clp.is_present("nogui") {
         return screen::run_screen(scope).map_err(|e| e.into());
-    }
+    }*/
 
     loop {
         let mut input = String::new();

@@ -1,10 +1,8 @@
 use crate::action::Action;
-use crate::error::{ActionError, LineError};
+use crate::ecs_ish::GenData;
+use crate::error::ActionError;
 use crate::expr::Expr;
-use crate::prev_iter::Backer;
-use crate::prev_iter::LineCounter;
 use crate::proto::{Proto, ProtoNode, ProtoP};
-use crate::token::{TokPrev, Token};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::BTreeMap;
 
@@ -13,12 +11,11 @@ pub enum Value {
     Bool(bool),
     Num(i32),
     Str(String),
-    Ident(Proto),
-    List(Vec<Value>),
-    Map(BTreeMap<String, Value>),
+    Ref(GenData),
+    List(Vec<GenData>),
+    Map(BTreeMap<String, GenData>),
     ExprDef(Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
-    Deref(Box<Value>),
 }
 
 pub enum SetResult {
@@ -208,13 +205,6 @@ impl Value {
                     Ok(List(a))
                 }
             },
-            Proto(mut a) => match rhs {
-                Proto(b) => {
-                    a.extend(b.pp());
-                    Ok(Proto(a))
-                }
-                e => Err(ActionError::new(&format!("proto cannot add {:?}", e))),
-            },
             u => Err(ActionError::new(&format!("Add of {:?} not suppported", u))),
         }
     }
@@ -274,12 +264,6 @@ impl Value {
     }
 }
 
-impl From<String> for Value {
-    fn from(s: String) -> Self {
-        Value::Str(s)
-    }
-}
-
 impl PartialOrd for Value {
     fn partial_cmp(&self, other: &Value) -> Option<Ordering> {
         use Value::*;
@@ -296,115 +280,4 @@ impl PartialOrd for Value {
     }
 }
 
-impl Value {
-    pub fn func_def(it: &mut TokPrev) -> Result<Self, LineError> {
-        //handle bracket
-        match it.next().ok_or(it.eof())? {
-            Token::Expr => {
-                let ex = Expr::from_tokens(it)?;
-                return Ok(Value::ExprDef(Box::new(ex)));
-            }
-            Token::Fn => {}
-            e => return Err(it.err(&format!("Func def on notafunc {:?}", e))),
-        }
-        if it.next() != Some(Token::BracketO) {
-            return Err(it.err("Func should start with '('"));
-        }
-
-        let mut params = Vec::new();
-        //loop params
-        while let Some(tk) = it.next() {
-            match tk {
-                Token::Ident(s) => params.push(s),
-                Token::Comma | Token::Break => {}
-                Token::BracketC => break,
-                e => return Err(it.err(&format!("Ux {:?} in func params", e))),
-            }
-        }
-
-        if it.next() != Some(Token::SquigleO) {
-            return Err(it.err("Func has nothing to do"));
-        }
-
-        let mut actions = Vec::new();
-        //loop actions
-        while let Some(tk) = it.next() {
-            match tk {
-                Token::SquigleC => break,
-                Token::Comma | Token::Break => {}
-                _ => {
-                    it.back();
-                    actions.push(Action::from_tokens(it)?);
-                }
-            }
-        }
-        Ok(Value::FuncDef(params, actions))
-    }
-
-    pub fn from_tokens(it: &mut TokPrev) -> Result<Self, LineError> {
-        match it.next() {
-            None => Err(it.err("UX-EOF")),
-            Some(Token::Qoth(s)) => Ok(Value::Str(s)),
-            Some(Token::True) => Ok(Self::Bool(true)),
-            Some(Token::False) => Ok(Self::Bool(false)),
-            Some(Token::Num(n)) => Ok(Value::Num(n)),
-            Some(Token::Expr) | Some(Token::Fn) => {
-                it.back();
-                Self::func_def(it)
-            }
-            Some(Token::SquareO) => {
-                let mut rlist = Vec::new();
-                while let Some(v) = it.next() {
-                    match v {
-                        Token::Comma | Token::Break => {}
-                        Token::SquareC => return Ok(Value::List(rlist)),
-
-                        _ => {
-                            it.back();
-                            rlist.push(Value::from_tokens(it)?)
-                        }
-                    }
-                }
-
-                Err(it.err("UX-EOF"))
-            }
-            v => Err(it.err(&format!("UX - {:?}", v))),
-        }
-    }
-}
-
-pub struct VIter<'a> {
-    v: &'a Value,
-    n: usize,
-}
-
-impl<'a> Iterator for VIter<'a> {
-    type Item = Value;
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.v {
-            Value::Map(_) => {
-                return None;
-            }
-            Value::List(l) => {
-                let m = self.n;
-                self.n += 1;
-                l.get(m).map(|v| v.clone())
-            }
-            _ => {
-                if self.n > 0 {
-                    return None;
-                }
-                self.n += 1;
-                Some(self.v.clone())
-            }
-        }
-    }
-}
-
-impl<'a> IntoIterator for &'a Value {
-    type IntoIter = VIter<'a>;
-    type Item = Value;
-    fn into_iter(self) -> Self::IntoIter {
-        VIter { v: self, n: 0 }
-    }
-}
+impl Value {}

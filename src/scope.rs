@@ -205,10 +205,6 @@ impl Scope {
 
     pub fn set(&mut self, p: &Proto, v: Value) -> Result<Option<Value>, ActionError> {
         //proto named var
-        if p.var {
-            let sr = self.data.set_at_path(p.pp(), v);
-            return self.on_sr(sr);
-        }
 
         let p2 = self.in_context(p)?;
         //Try for local variable first
