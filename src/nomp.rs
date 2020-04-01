@@ -1,70 +1,74 @@
-use gobble::combi::*;
-use gobble::err::*;
-use gobble::ptrait::*;
-use gobble::reader::*;
+use gobble::*;
 use std::str::FromStr;
 
 use crate::action::Action;
 
-use crate::expr::{EList, Expr, MapItem, Op};
+use crate::expr::{Expr, MapItem, Op};
 use crate::value::Value;
 
-pub fn p_action<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Action> {
-    pp_action.then_ig(p_break).parse(i)
-}
-pub fn pp_action<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Action> {
-    if let Ok((r2, (opn, id))) = tag("+").ig_then(maybe(p_num)).then(p_ident).parse(i) {
-        return Ok((r2, Action::AddItem(opn.unwrap_or(1), id)));
-    }
-    if let Ok((r2, (opn, id))) = tag("-").ig_then(maybe(p_num)).then(p_ident).parse(i) {
-        return Ok((r2, Action::RemItem(opn.unwrap_or(1), id)));
-    }
-    let (r, ex) = p_expr_l.then_ig(ws(0)).parse(i)?;
-    if let Ok((r2, _)) = tag(":").parse(&r) {
-        return Ok((r2, Action::Select(ex)));
-    }
-    if let Ok((r2, (op, ex2))) = p_op.then_ig(tag("=")).then(p_expr).parse(&r) {
-        return Ok((r2, Action::OpSet(op, ex, ex2)));
-    }
-    if let Ok((r2, ex2)) = tag("=").ig_then(p_expr).parse(&r) {
-        return Ok((r2, Action::Set(ex, ex2)));
-    }
-    Ok((r, Action::Display(ex)))
+pub fn action() -> impl Parser<Action> {
+    ws(0).ig_then(pp_action).then_ig(l_break())
 }
 
-fn p_ident<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, String> {
-    let (r, (mut a, b)) = read_fs(is_alpha, 1)
+pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
+    let ps = s_tag("+")
+        .ig_then(maybe(num()))
+        .then(ident())
+        .map(|(nop, s)| Action::AddItem(nop.unwrap_or(1), s))
+        .or(s_tag("-")
+            .ig_then(maybe(num()))
+            .then(ident())
+            .map(|(nop, s)| Action::AddItem(nop.unwrap_or(1), s)));
+    if let Ok((r, v)) = ps.parse(i) {
+        return Ok((r, v));
+    }
+
+    let (r, l_ex) = p_expr_l.parse(i)?;
+    if let Ok((r2, _)) = s_tag(":").parse(&r) {
+        return Ok((r2, Action::Select(l_ex)));
+    }
+    if let Ok((r2, (oper, ex2))) = op().then_ig(tag("=")).then(p_expr).parse(&r) {
+        return Ok((r2, Action::OpSet(oper, l_ex, ex2)));
+    }
+    if let Ok((r2, r_ex)) = s_tag("=").ig_then(p_expr).parse(&r) {
+        return Ok((r2, Action::Set(l_ex, r_ex)));
+    }
+    Ok((r, Action::Display(l_ex)))
+}
+
+fn ident() -> impl Parser<String> {
+    ws(0)
+        .ig_then(read_fs(is_alpha, 1))
         .then(read_fs(is_alpha_num, 0))
-        .parse(i)?;
-    a.push_str(&b);
-    return Ok((r, a));
+        .map(|(mut a, b)| {
+            a.push_str(&b);
+            a
+        })
 }
-fn p_num<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, i32> {
-    let (r, v) = read_fs(is_num, 1).parse(i)?;
-    Ok((r, i32::from_str(&v).unwrap()))
-}
-
-fn p_break<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, ()> {
-    ws(0).then_ig(tag(";").or(tag("\n"))).parse(i)
+fn num() -> impl Parser<i32> {
+    ws(0)
+        .ig_then(read_fs(is_num, 1))
+        .try_map(|ns| i32::from_str(&ns).map_err(|_| ECode::SMess("Not a Num")))
 }
 
-fn p_value<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Value> {
-    let (r, _) = ws(0).parse(i)?;
-    if let Ok((r, v)) = tag("true").or(tag("false")).parse(&r) {
-        return Ok((r, Value::Bool(v == "true")));
-    }
-    if let Ok((r, v)) = p_num(&r) {
-        return Ok((r, Value::Num(v)));
-    }
-    if let Ok((r, v)) = tag("\"").ig_then(esc('"', '\\').e_map('t', '\t')).parse(&r) {
-        return Ok((r, Value::Str(v)));
-    }
-
-    return Err(ParseError::new("No value parseable", 0));
+fn l_break() -> impl Parser<()> {
+    ws(0).then_ig(tag(";").or(tag("\n")))
 }
 
-fn p_op<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Op> {
-    let parser = ws(0)
+fn value() -> impl Parser<Value> {
+    ws(0).ig_then(
+        tag("true")
+            .map(|_| Value::Bool(true))
+            .or(tag("false").map(|_| Value::Bool(false)))
+            .or(num().map(|v| Value::Num(v)))
+            .or(tag("\"")
+                .ig_then(esc('"', '\\').e_map('t', '\t'))
+                .map(|s| Value::Str(s))),
+    )
+}
+
+fn op() -> impl Parser<Op> {
+    ws(0)
         .ig_then(
             tag("+")
                 .or(tag("-"))
@@ -76,65 +80,56 @@ fn p_op<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Op> {
                 .or(tag("<"))
                 .or(tag("/")),
         )
-        .then_ig(ws(0));
-    let (ri, c) = parser.parse(i)?;
-    let rop = Op::from_str(c)?;
-    Ok((ri, rop))
+        .try_map(|c| Op::from_str(c))
 }
 
-fn p_list<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, EList<Expr>> {
-    if let Ok((ir, e)) = p_expr(i) {
-        if let Ok((ir2, l)) = tag(",").ig_then(p_list).parse(&ir) {
-            return Ok((ir2, EList(Some(Box::new((e, l))))));
-        }
-    }
-    Ok((i.clone(), EList(None)))
+fn list() -> impl Parser<Vec<Expr>> {
+    ws(0)
+        .ig_then(tag("["))
+        .ig_then(sep(p_expr, wrap(ws(0), tag(",")), false))
+        .then_ig(tag("]"))
 }
 
-fn p_map_item<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, MapItem> {
-    p_ident
-        .then_ig(tag(":"))
+fn map_item() -> impl Parser<MapItem> {
+    ident()
+        .then_ig(s_tag(":"))
         .then(p_expr)
+        .map(|(k, v)| MapItem { k, v })
+}
+
+fn map() -> impl Parser<Vec<MapItem>> {
+    s_tag("{")
+        .ig_then(repeat(map_item().then_ig(maybe(s_tag(","))), 0))
+        .then_ig(s_tag("}"))
+}
+
+//must not be impl<Parser<Expr>> to avoid giant objects
+fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
+    let ps = value()
+        .map(|v| Expr::Val(v))
+        .or(s_tag("-").ig_then(p_expr_l).map(|e| Expr::Neg(Box::new(e))))
+        .or(s_tag("$").ig_then(p_expr_l).map(|e| Expr::Ref(Box::new(e))))
+        .or(s_tag("(")
+            .ig_then(p_expr)
+            .then_ig(s_tag(")"))
+            .map(|e| Expr::Bracket(Box::new(e))))
+        .or(s_tag("[")
+            .ig_then(list())
+            .then_ig(s_tag("]"))
+            .map(|e| Expr::List(e)))
+        .or(ident().map(|e| Expr::Ident(e)));
+
+    ps.parse(i)
+}
+
+//Cannot be a ->impl Parser() to avoid infinite struct creation
+pub fn p_expr<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
+    ws(0)
+        .ig_then(p_expr_l)
+        .then(maybe(op().then(p_expr)))
+        .map(|(l, r)| match r {
+            Some((o, re)) => re.add_left(l, o),
+            None => l,
+        })
         .parse(i)
-        .map(|(r, (k, v))| (r, MapItem { k, v }))
-}
-
-fn p_map<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, EList<MapItem>> {
-    if let Ok((ir, e)) = p_map_item(i) {
-        if let Ok((ir2, l)) = tag(",").ig_then(p_map).parse(&ir) {
-            return Ok((ir2, EList(Some(Box::new((e, l))))));
-        }
-    }
-    Ok((i.clone(), EList(None)))
-}
-
-fn p_expr_l<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Expr> {
-    let (i2, _) = ws(0).parse(i)?;
-    if let Ok((ir, e)) = p_value.parse(&i2) {
-        return Ok((ir, Expr::Val(e)));
-    }
-    if let Ok((ir, e)) = tag("-").ig_then(p_expr_l).parse(&i2) {
-        return Ok((ir, Expr::Neg(Box::new(e))));
-    }
-    if let Ok((ir, e)) = tag("$").ig_then(p_expr_l).parse(&i2) {
-        return Ok((ir, Expr::Ref(Box::new(e))));
-    }
-    if let Ok((ir, e)) = tag("(").ig_then(p_expr).then_ig(tag(")")).parse(&i2) {
-        return Ok((ir, Expr::Bracket(Box::new(e))));
-    }
-    if let Ok((ir, l)) = tag("[").ig_then(p_list).then_ig(tag("]")).parse(&i2) {
-        return Ok((ir, Expr::List(l)));
-    }
-    if let Ok((ir, v)) = p_ident(&i2) {
-        return Ok((ir, Expr::Ident(v)));
-    }
-    Err(ParseError::new("Expr Left fail", 0))
-}
-
-pub fn p_expr<I: Iterator<Item = char> + Clone>(i: &I) -> ParseRes<I, Expr> {
-    let (ir, l) = p_expr_l.parse(i)?;
-    if let Ok((ir, (op, v2))) = p_op.then(p_expr).parse(&ir) {
-        return Ok((ir, v2.add_left(l, op)));
-    }
-    Ok((ir, l))
 }

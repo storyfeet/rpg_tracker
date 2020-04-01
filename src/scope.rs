@@ -5,6 +5,7 @@ use crate::expr::Expr;
 use crate::nomp::p_action;
 use crate::proto::Proto;
 use crate::value::Value;
+use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
 
@@ -62,26 +63,18 @@ impl Scope {
     }
 
     pub fn as_ref(&self, p: Proto) -> Option<&GenData> {
-        let ref = self.base()
+        let mut gd = self.base.get(self.base.len() - 1);
         for pp in p.pp() {
-
-        }
-        let pc = self.in_context(p).ok()?; // CONSIDER: make fn return result
-                                           //var with name exists
-        if let Some(v) = self.data.get_path(&mut pc.pp()) {
-            return Some(v);
-        }
-        unsafe {
-            match self.parent {
-                Parent::Mut(par) => (&*par).get(p),
-                Parent::Const(par) => (&*par).get(p),
-                Parent::None => None,
+            match self.gm.get(&gd) {
+                None => return None,
+                Some(Value::Map(m)) => gd = m.get(&pp.as_string())?.clone_weak(),
+                Some(Value::List(l)) => gd = l.get(&pp.as_num().ok()?),
             }
         }
     }
 
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
-        self.on_wrap(|sc|ex.eval(sc))
+        self.on_wrap(|sc| ex.eval(sc))
     }
 
     pub fn for_each<T, IT>(
@@ -103,10 +96,10 @@ impl Scope {
         actions: &[Action],
         params: Vec<Value>,
     ) -> Result<Option<Value>, ActionError> {
-        self.on_wrap(|sc|{
+        self.on_wrap(|sc| {
             for p in 0..params.len() {
                 if pnames.len() > p {
-                    sc.set_param(&pnames[p], params[p]);
+                    sc.set_local(&pnames[p], params[p]);
                 }
             }
             for a in actions {
@@ -121,18 +114,21 @@ impl Scope {
             }
             Ok(None)
         })
-
     }
 
-    pub fn set_param(&mut self, k: &str, v: Value) {
-        self.data.set_at_path(Proto::one(k).pp(), v);
+    pub fn set_local(&mut self, k: &str, v: Value) {
+        if let Some(ref b) = self.base.get(self.base.len() - 1) {
+            if let Some(Value::Map(ref mut m)) = self.gm.get_mut(b) {
+                self.set_child(m, k, v)
+            }
+        }
     }
 
-    fn on_sr(&mut self, sr: SetResult) -> Result<Option<Value>, ActionError> {
-        match sr {
-            SetResult::Ok(v) => Ok(v),
-            SetResult::Deref(p, v) => self.set(&p, v),
-            SetResult::Err(e) => Err(e),
+    pub fn set_child(&mut self, par: &mut BTreeMap<String, GenData>, k: &str, child: Value) {
+        let ng = self.gm.push(child);
+        match par.insert(k.to_string(), ng) {
+            Some(gd) => self.gm.dec_rc(gd),
+            None => {}
         }
     }
 
@@ -157,19 +153,6 @@ impl Scope {
         self.on_sr(sr)
     }
 
-    pub fn in_context(&self, p: &Proto) -> Result<Proto, ActionError> {
-        match self.base.as_ref() {
-            Some(b) => Ok(b.extend_new(p.pp())),
-            None => unsafe {
-                match self.parent {
-                    Parent::Const(par) => (&*par).in_context(p),
-                    Parent::Mut(par) => (&*par).in_context(p),
-                    Parent::None => Err(ActionError::new("Cannot find context for '.'")),
-                }
-            },
-        }
-    }
-
     pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
         fn err(s: &str) -> ActionError {
             ActionError::new(s)
@@ -188,8 +171,7 @@ impl Scope {
                 }
             }
             Action::Set(px, v) => {
-                let pv = px.eval_expr(self)?;
-                let proto = pv.as_proto()?;
+                let proto = px.eval_path(self)?;
                 self.set(proto, v.eval(self)?)
                     .map_err(|_| err("Could not Set"))?;
             }

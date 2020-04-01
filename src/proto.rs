@@ -1,6 +1,7 @@
 use crate::error::ActionError;
 use crate::value::Value;
 use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProtoNode {
@@ -17,6 +18,13 @@ impl ProtoNode {
         match self {
             ProtoNode::Num(n) => n.to_string(),
             ProtoNode::Str(s) => s.clone(),
+        }
+    }
+
+    pub fn as_num(&self) -> Option<i32> {
+        match self {
+            ProtoNode::Num(n) => Some(*n),
+            ProtoNode::Str(s) => i32::from_str(s).ok(),
         }
     }
 }
@@ -44,21 +52,6 @@ impl Display for Proto {
 impl Proto {
     pub fn new() -> Self {
         Proto { v: Vec::new() }
-    }
-
-    pub fn join(a: Value, b: Value) -> Result<Self, ActionError> {
-        let ap = match a {
-            Value::Proto(ap) => ap,
-            Value::Str(s) => Proto {
-                v: vec![ProtoNode::Str(s)],
-            },
-            Value::Num(n) => Proto {
-                v: vec![ProtoNode::Num(n)],
-            },
-            _ => return Err(ActionError::new("Cannot add non string/num to Proto")),
-        };
-        ap.push_val(b)?;
-        Ok(ap)
     }
 
     pub fn one(s: &str) -> Self {
@@ -93,7 +86,6 @@ impl Proto {
 
     pub fn push_val(&mut self, v: Value) -> Result<(), ActionError> {
         match v {
-            Value::Proto(pp) => self.v.extend(pp.v),
             Value::Str(s) => self.v.push(ProtoNode::Str(s)),
             Value::Num(n) => self.v.push(ProtoNode::Num(n)),
             _ => return Err(ActionError::new("proto parts must resolve to str or num")),

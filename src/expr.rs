@@ -4,7 +4,7 @@ use crate::error::{ActionError, LineError};
 use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::value::Value;
-use gobble::err::ParseError;
+use gobble::err::{ParseError,ECode};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
@@ -21,8 +21,8 @@ pub enum Op {
 }
 
 impl FromStr for Op {
-    type Err = ParseError;
-    fn from_str(s: &str) -> Result<Self, ParseError> {
+    type Err = ECode;
+    fn from_str(s: &str) -> Result<Self, ECode> {
         use Op::*;
         Ok(match s {
             "+" => Add,
@@ -33,7 +33,7 @@ impl FromStr for Op {
             "<" => Less,
             "." => Dot,
             "==" => Equal,
-            _ => return Err(ParseError::new("not a legit operator", 0)),
+            _ => return Err(ECode::Never("not a legit operator")),
         })
     }
 }
@@ -68,8 +68,6 @@ impl Op {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
-pub struct EList<E>(pub Option<Box<(E, EList<E>)>>);
 
 #[derive(PartialEq, Debug)]
 pub struct MapItem {
@@ -85,29 +83,11 @@ pub enum Expr {
     Neg(Box<Expr>),
     Ref(Box<Expr>),
     Ident(String),
-    List(EList<Expr>),
-    Map(EList<MapItem>),
+    List(Vec<Expr>),
+    Map(Vec<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
 }
 
-fn eval_list_expr(l: &EList<Expr>, v: &mut Vec<Value>, sc: &Scope) -> Result<(), ActionError> {
-    if let Some(b) = l.0 {
-        v.push(b.0.eval(sc)?);
-        (b.1, v, sc);
-    }
-    Ok(())
-}
-fn eval_map_expr(
-    l: &EList<MapItem>,
-    v: &mut BTreeMap<String, Value>,
-    sc: &Scope,
-) -> Result<(), ActionError> {
-    if let Some(b) = l.0 {
-        v.insert(b.0.k, b.0.v.eval(sc)?);
-        (b.1, v, sc);
-    }
-    Ok(())
-}
 
 impl Expr {
     pub fn num(n: i32) -> Self {
