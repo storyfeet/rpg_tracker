@@ -138,6 +138,9 @@ impl GenManager {
     }
 
     pub fn inc_rc(&mut self, g: &GenData) -> bool {
+        if !g.strong {
+            return false;
+        }
         if let Some(ea) = self.items.get_mut(g.pos) {
             if ea.gen == g.gen {
                 ea.rc += 1;

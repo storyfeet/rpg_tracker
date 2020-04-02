@@ -44,10 +44,10 @@ fn ident() -> impl Parser<String> {
             a
         })
 }
-fn num() -> impl Parser<i32> {
+fn num() -> impl Parser<isize> {
     ws(0)
         .ig_then(read_fs(is_num, 1))
-        .try_map(|ns| i32::from_str(&ns).map_err(|_| ECode::SMess("Not a Num")))
+        .try_map(|ns| isize::from_str(&ns).map_err(|_| ECode::SMess("Not a Num")))
 }
 
 fn l_break() -> impl Parser<()> {
@@ -99,7 +99,7 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
             .ig_then(esc('"', '\\').e_map('t', '\t'))
             .map(|s| Expr::Str(s)))
         .or(s_tag("-").ig_then(p_expr_l).map(|e| Expr::Neg(Box::new(e))))
-        .or(s_tag("$").ig_then(p_expr_l).map(|e| Expr::Ref(Box::new(e))))
+        .or(s_tag("$").ig_then(p_expr).map(|e| Expr::Deref(Box::new(e))))
         .or(s_tag("(")
             .ig_then(p_expr)
             .then_ig(s_tag(")"))
@@ -108,7 +108,7 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
             .ig_then(list())
             .then_ig(s_tag("]"))
             .map(|e| Expr::List(e)))
-        .or(ident().map(|e| Expr::Ident(e)));
+        .or(ident().map(|e| Expr::Str(e)));
 
     ws(0).ig_then(ps).parse(i)
 }

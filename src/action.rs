@@ -5,8 +5,8 @@ pub enum Action {
     Select(Expr),
     OpSet(Op, Expr, Expr),
     Set(Expr, Expr),
-    AddItem(i32, String),
-    RemItem(i32, String),
+    AddItem(isize, String),
+    RemItem(isize, String),
     Return(Expr),
     Display(Expr),
 }

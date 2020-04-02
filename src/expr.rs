@@ -1,8 +1,8 @@
 use crate::action::Action;
-use crate::error::{ActionError, LineError};
+use crate::error::ActionError;
 //use crate::prev_iter::Backer;
 //use crate::prev_iter::LineCounter;
-use crate::proto::Proto;
+use crate::proto::{Proto, ProtoNode};
 use crate::scope::Scope;
 use crate::value::Value;
 use gobble::err::ECode;
@@ -84,6 +84,7 @@ pub enum Expr {
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
     DotStart(Box<Expr>),
+    Deref(Box<Expr>),
     List(Vec<Expr>),
     Map(Vec<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
@@ -114,32 +115,44 @@ impl Expr {
         })
     }
 
-    pub fn eval(&self, scope: &mut Scope) -> Result<Value, ActionError> {
+    pub fn eval(&self, sc: &mut Scope) -> Result<Value, ActionError> {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
+            Bool(b) => Value::Bool(*b),
             Num(n) => Value::Num(*n),
+            Str(s) => Value::Str(s.clone()),
 
-            Bracket(a) => a.eval(scope)?,
-            Neg(a) => a.eval(scope)?.try_neg()?,
-            Oper(Op::Add, a, b) => a.eval(scope)?.try_add(b.eval(scope)?, scope.gm_mut())?,
-            Oper(Op::Sub, a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
-            Oper(Op::Mul, a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
-            Oper(Op::Div, a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
-            Oper(Op::Greater, a, b) => Value::Bool(a.eval(scope)? > b.eval(scope)?),
-            Oper(Op::Less, a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
-            Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
-            Oper(Op::Dot, a, b) => {
-                let proto = self.eval_path(scope)?;
-                scope.get(proto)?;
+            Bracket(a) => a.eval(sc)?,
+            Neg(a) => a.eval(sc)?.try_neg()?,
+            Oper(Op::Add, a, b) => a.eval(sc)?.try_add(b.eval(sc)?, sc.gm_mut())?,
+            Oper(Op::Sub, a, b) => a.eval(sc)?.try_sub(b.eval(sc)?)?,
+            Oper(Op::Mul, a, b) => a.eval(sc)?.try_mul(b.eval(sc)?)?,
+            Oper(Op::Div, a, b) => a.eval(sc)?.try_div(b.eval(sc)?)?,
+            Oper(Op::Greater, a, b) => Value::Bool(a.eval(sc)? > b.eval(sc)?),
+            Oper(Op::Less, a, b) => Value::Bool(a.eval(sc)? < b.eval(sc)?),
+            Oper(Op::Equal, a, b) => Value::Bool(a.eval(sc)? == b.eval(sc)?),
+            Oper(Op::Dot, _, _) => {
+                let proto = self.eval_path(sc)?;
+                let v = sc.get(&proto).ok_or(ActionError::new("Nothing at path"))?;
+                v.clone_shallow(sc.gm_mut())
             }
-            List(ref l) => Value::List(l.iter().map(|e| scope.push_mem(e.eval(scope))).collect()),
+            List(ref l) => {
+                let mut res = Vec::new();
+                for e in l {
+                    let v = e.eval(sc)?;
+                    res.push(sc.push_mem(v));
+                }
+                Value::List(res)
+            }
             Map(ref l) => {
-                let mut t = BTreeMap::new();
-                eval_map_expr(l, &mut t, scope)?;
-                Value::Map(t)
+                let mut res = BTreeMap::new();
+                for e in l {
+                    let v = e.v.eval(sc)?;
+                    res.insert(ProtoNode::Str(e.k), sc.push_mem(v));
+                }
+                Value::Map(res)
             }
-            Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
         })
     }
 
@@ -159,16 +172,13 @@ impl Expr {
     pub fn print(&self) -> String {
         use Expr::*;
         match self {
-            Val(v) => v.print(0),
+            Num(n) => n.to_string(),
+            Str(s) => format!("\"{}\"", s),
             Oper(o, a, b) => format!("{}{}{})", a.print(), o.to_str(), b.print()),
             Neg(a) => format!("-{}", a.print()),
             Bracket(b) => format!("({})", b.print()),
             e => format!("{:?}", e),
         }
-    }
-
-    pub fn from_tokens(_: &mut TokPrev) -> Result<Expr, LineError> {
-        unimplemented!();
     }
 }
 #[cfg(test)]
