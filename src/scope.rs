@@ -56,20 +56,17 @@ impl Scope {
         let mut ss = LCChars::str(s);
         let ac = crate::nomp::action();
         loop {
-            match ac.parse(&ss) {
-                Ok((ns, a)) => {
-                    ss = ns;
-                    match self.do_action(&a) {
-                        //TODO consider writing file
-                        Ok(Some(v)) => {
-                            println!("{}", v.print(0, &self.gm));
-                        }
-                        Ok(None) => {}
-                        Err(e) => println!("Error {}", e),
-                    }
+            let (ns, a) = ac.parse(&ss)?;
+            print!("Action = {:?}", a);
+            ss = ns;
+            /*match self.do_action(&a) {
+                //TODO consider writing file
+                Ok(Some(v)) => {
+                    println!("{}", v.print(0, &self.gm));
                 }
+                Ok(None) => {}
                 Err(e) => println!("Error {}", e),
-            }
+            }*/
         }
     }
 
@@ -86,15 +83,24 @@ impl Scope {
         self.gm.push(v)
     }
 
+    pub fn select_base(&self, p: &Proto) -> Option<&GenData> {
+        let n = if p.root {
+            p.dots
+        } else {
+            let mut last = 0;
+            for (i, b) in self.bases.iter().enumerate() {
+                if !b.swap_off {
+                    last = i;
+                }
+            }
+            last
+        };
+        self.bases.get(n).map(|v| &v.gd)
+    }
+
     pub fn get<'a>(&'a self, p: &Proto) -> Option<&'a Value> {
-        if p.dots == 0 {
-            return self.get_from(&self.bases[0].gd, p.pp());
-        }
-        if p.dots <= self.bases.len() {
-            let bpos = self.bases.len() - p.dots;
-            return self.get_from(&self.bases[bpos].gd, p.pp());
-        }
-        None
+        let b = self.select_base(p)?.clone_ignore_gm();
+        return self.get_from(&b, p.pp());
     }
 
     pub fn get_from<'a>(&'a self, base: &GenData, pp: ProtoP) -> Option<&'a Value> {

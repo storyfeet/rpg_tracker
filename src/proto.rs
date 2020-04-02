@@ -36,6 +36,7 @@ impl ProtoNode {
 pub struct Proto {
     v: Vec<ProtoNode>,
     pub dots: usize,
+    pub root: bool,
 }
 
 impl Display for Proto {
@@ -59,21 +60,32 @@ impl Proto {
         Proto {
             v: Vec::new(),
             dots: 0,
+            root: false,
         }
     }
 
-    pub fn one(s: &str) -> Self {
-        Proto {
-            v: vec![ProtoNode::str(s)],
-            dots: 0,
-        }
+    pub fn push(mut self, pn: ProtoNode) -> Self {
+        self.v.push(pn);
+        self
+    }
+
+    pub fn rooted(mut self) -> Self {
+        self.root = true;
+        self
+    }
+
+    pub fn one(pn: ProtoNode) -> Self {
+        Self::new().push(pn)
+    }
+    pub fn str(s: &str) -> Self {
+        Self::one(ProtoNode::Str(s.to_string()))
     }
 
     pub fn num(n: usize) -> Self {
-        Proto {
-            v: vec![ProtoNode::Num(n)],
-            dots: 0,
-        }
+        Self::one(ProtoNode::Num(n))
+    }
+    pub fn dr() -> Self {
+        Self::one(ProtoNode::Deref)
     }
 
     pub fn dot(mut self) -> Self {
@@ -97,15 +109,6 @@ impl Proto {
             res.v.pop();
         }
         res
-    }
-
-    pub fn push_val(&mut self, v: Value) -> Result<(), ActionError> {
-        match v {
-            Value::Str(s) => self.v.push(ProtoNode::Str(s)),
-            Value::Num(n) => self.v.push(ProtoNode::Num(n.abs() as usize)),
-            _ => return Err(ActionError::new("proto parts must resolve to str or num")),
-        }
-        Ok(())
     }
 
     pub fn pp<'a>(&'a self) -> ProtoP<'a> {

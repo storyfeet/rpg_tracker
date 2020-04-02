@@ -52,6 +52,9 @@ fn main() -> Result<(), failure::Error> {
             Ok(0) => return Ok(()),
             _ => {}
         }
+        if let Err(e) = scope.handle_input(&input) {
+            println!("{}", e);
+        }
     }
 }
 

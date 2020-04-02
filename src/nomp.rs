@@ -71,10 +71,9 @@ fn op() -> impl Parser<Op> {
 }
 
 fn list() -> impl Parser<Vec<Expr>> {
-    ws(0)
-        .ig_then(tag("["))
-        .ig_then(sep(p_expr, wrap(ws(0), tag(",")), false))
-        .then_ig(tag("]"))
+    s_tag("[")
+        .ig_then(sep(p_expr, s_tag(","), false))
+        .then_ig(s_tag("]"))
 }
 
 fn map_item() -> impl Parser<MapItem> {
@@ -98,16 +97,20 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
         .or(tag("\"")
             .ig_then(esc('"', '\\').e_map('t', '\t'))
             .map(|s| Expr::Str(s)))
+        .or(s_tag(".")
+            .ig_then(p_expr)
+            .map(|e| Expr::DotStart(Box::new(e))))
+        .or(s_tag(":")
+            .ig_then(p_expr)
+            .map(|e| Expr::Rooted(Box::new(e))))
         .or(s_tag("-").ig_then(p_expr_l).map(|e| Expr::Neg(Box::new(e))))
         .or(s_tag("$").ig_then(p_expr).map(|e| Expr::Deref(Box::new(e))))
         .or(s_tag("(")
             .ig_then(p_expr)
             .then_ig(s_tag(")"))
             .map(|e| Expr::Bracket(Box::new(e))))
-        .or(s_tag("[")
-            .ig_then(list())
-            .then_ig(s_tag("]"))
-            .map(|e| Expr::List(e)))
+        .or(list().map(|e| Expr::List(e)))
+        .or(map().map(|e| Expr::Map(e)))
         .or(ident().map(|e| Expr::Ident(e)));
 
     ws(0).ig_then(ps).parse(i)

@@ -85,6 +85,7 @@ pub enum Expr {
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
     DotStart(Box<Expr>),
+    Rooted(Box<Expr>),
     Deref(Box<Expr>),
     List(Vec<Expr>),
     Map(Vec<MapItem>),
@@ -102,13 +103,15 @@ impl Expr {
         use Expr::*;
         Ok(match self {
             Num(n) => Proto::num(*n as usize),
-            Str(s) => Proto::one(s),
-            Ident(s) => Proto::one(s),
+            Str(s) => Proto::str(s),
+            Ident(s) => Proto::str(s),
+            Rooted(e) => e.eval_path(sc)?.rooted(),
+            Deref(e) => Proto::dr().extend_new(e.eval_path(sc)?.pp()),
             DotStart(e) => e.eval_path(sc)?.dot(),
             Oper(Op::Dot, a, b) => a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
             ot => match ot.eval(sc)? {
                 Value::Num(n) => Proto::num(n as usize),
-                Value::Str(s) => Proto::one(&s),
+                Value::Str(s) => Proto::str(&s),
                 ov => {
                     sc.gm_mut().drop(ov);
                     return Err(ActionError::new("Could not treat as proto"));
@@ -134,7 +137,7 @@ impl Expr {
             Oper(Op::Greater, a, b) => Value::Bool(a.eval(sc)? > b.eval(sc)?),
             Oper(Op::Less, a, b) => Value::Bool(a.eval(sc)? < b.eval(sc)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(sc)? == b.eval(sc)?),
-            Oper(Op::Dot, _, _) | Ident(_) | DotStart(_) => {
+            Oper(Op::Dot, _, _) | Ident(_) | DotStart(_) | Rooted(_) => {
                 let proto = self.eval_path(sc)?;
                 let v = sc.get(&proto).ok_or(ActionError::new("Nothing at path"))?;
                 let vs = v.clone_ignore_rc();
