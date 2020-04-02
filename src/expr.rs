@@ -78,7 +78,7 @@ pub struct MapItem {
 #[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
     Bool(bool),
-    Num(i64),
+    Num(isize),
     Str(String),
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
@@ -99,18 +99,18 @@ impl Expr {
     pub fn eval_path(&self, sc: &mut Scope) -> Result<Proto, ActionError> {
         use Expr::*;
         Ok(match self {
-            Num(n) => Proto::num(n),
+            Num(n) => Proto::num(*n as usize),
             Str(s) => Proto::one(s),
+            DotStart(e) => e.eval_path(sc)?.dot(),
             Oper(Op::Dot, a, b) => a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
-            ot => match ot.eval(sc)?{
-                Value::Num(n)=>Proto::num(n),
-                Value::Str(s)=>Proto::one(s),
+            ot => match ot.eval(sc)? {
+                Value::Num(n) => Proto::num(n as usize),
+                Value::Str(s) => Proto::one(&s),
                 ov => {
-                    ov.gen_drop(sc.gm_mut());
-                    return Err(ActionError::new("Could not treat as proto")),
+                    sc.gm_mut().drop(ov);
+                    return Err(ActionError::new("Could not treat as proto"));
                 }
-
-            }
+            },
         })
     }
 
@@ -118,10 +118,11 @@ impl Expr {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
-            Val(n) => n.clone(scope),
+            Num(n) => Value::Num(*n),
+
             Bracket(a) => a.eval(scope)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
-            Oper(Op::Add, a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
+            Oper(Op::Add, a, b) => a.eval(scope)?.try_add(b.eval(scope)?, scope.gm_mut())?,
             Oper(Op::Sub, a, b) => a.eval(scope)?.try_sub(b.eval(scope)?)?,
             Oper(Op::Mul, a, b) => a.eval(scope)?.try_mul(b.eval(scope)?)?,
             Oper(Op::Div, a, b) => a.eval(scope)?.try_div(b.eval(scope)?)?,
@@ -130,7 +131,7 @@ impl Expr {
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
             Oper(Op::Dot, a, b) => {
                 let proto = self.eval_path(scope)?;
-                Value::Ref(proto)
+                scope.get(proto)?;
             }
             List(ref l) => Value::List(l.iter().map(|e| scope.push_mem(e.eval(scope))).collect()),
             Map(ref l) => {

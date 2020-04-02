@@ -1,4 +1,4 @@
-use crate::error::ActionError;
+//use crate::error::ActionError;
 use crate::value::Value;
 
 #[derive(Debug)]
@@ -51,22 +51,9 @@ impl GenData {
             strong: false,
         }
     }
-    pub fn drop_weak(self) -> Result<(), ActionError> {
-        if self.strong {
-            Err(ActionError::new(
-                "attempted to drop strong ref as though weak",
-            ))
-        } else {
-            Ok(())
-        }
-    }
-    pub fn drop_rc(self, gm: &mut GenManager) {
-        if self.strong {
-            gm.dec_rc(self);
-        }
-    }
 }
 
+#[derive(Debug)]
 pub struct StoreItem {
     val: Option<Value>,
     gen: u64,
@@ -127,19 +114,26 @@ impl GenManager {
         };
     }
 
-    pub fn dec_rc(&mut self, g: GenData) {
+    pub fn drop_ref(&mut self, g: GenData) {
+        if !g.strong {
+            return;
+        }
         if let Some(ea) = self.items.get_mut(g.pos) {
             if ea.gen == g.gen && ea.rc > 0 {
                 ea.rc -= 1;
                 if ea.rc == 0 {
                     if let Some(v) = ea.val.take() {
-                        for vd in v.gen_drop() {
-                            self.dec_rc(vd);
-                        }
+                        self.drop(v);
                         self.drops.push(g.pos);
                     }
                 }
             }
+        }
+    }
+
+    pub fn drop(&mut self, v: Value) {
+        for vd in v.gen_drop() {
+            self.drop_ref(vd);
         }
     }
 

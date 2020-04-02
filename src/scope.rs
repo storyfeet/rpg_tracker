@@ -2,26 +2,32 @@ use crate::action::Action;
 use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
-use crate::proto::Proto;
+use crate::proto::{Proto, ProtoP};
 use crate::value::Value;
 use gobble::{LCChars, Parser};
-use std::collections::BTreeMap;
+//use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
 
-//unsafe invariant that must be maintained:
-//rescoped Scopes can only be used for immediate function calls
+#[derive(Debug)]
+pub struct Base {
+    gd: GenData,
+    swap_off: bool,
+}
 
 #[derive(Debug)]
 pub struct Scope {
-    base: Vec<GenData>,
+    bases: Vec<Base>, //swapoff
     gm: GenManager,
 }
 
 impl Scope {
     pub fn new(gm: GenManager) -> Scope {
         Scope {
-            base: vec![gm.push(Value::map())],
+            bases: vec![Base {
+                gd: gm.push(Value::map()),
+                swap_off: false,
+            }],
             gm,
         }
     }
@@ -30,11 +36,18 @@ impl Scope {
     where
         F: FnOnce(&mut Scope) -> T,
     {
-        self.base.push(self.gm.push(Value::map()));
+        self.bases.push(Base {
+            gd: self.gm.push(Value::map()),
+            swap_off: false,
+        });
         let res = f(&mut self);
-        let b = self.base.pop().unwrap();
-        self.gm.dec_rc(b);
-        res
+        loop {
+            let bas = self.bases.pop().unwrap();
+            self.gm.drop_ref(bas.gd);
+            if !bas.swap_off {
+                return res;
+            }
+        }
     }
 
     pub fn handle_input(&mut self, s: &str) -> Result<(), ActionError> {
@@ -71,15 +84,30 @@ impl Scope {
         self.gm.push(v)
     }
 
-    pub fn as_ref(&self, p: Proto) -> Option<&GenData> {
-        let mut gd = self.base.get(self.base.len() - 1);
-        for pp in p.pp() {
-            match self.gm.get(&gd) {
-                None => return None,
-                Some(Value::Map(m)) => gd = m.get(&pp.as_string())?.clone_weak(),
-                Some(Value::List(l)) => gd = l.get(&pp.as_num().ok()?),
+    pub fn get<'a>(&'a self, p: &Proto) -> Option<&'a Value> {
+        if p.dots == 0 {
+            return self.get_from(&self.bases[0].gd, p.pp());
+        }
+        if p.dots <= self.bases.len() {
+            let bpos = self.bases.len() - p.dots;
+            return self.get_from(&self.bases[bpos].gd, p.pp());
+        }
+        None
+    }
+
+    pub fn get_from<'a>(&'a self, base: &GenData, mut pp: ProtoP) -> Option<&'a Value> {
+        let mut v = self.gm.get(base)?;
+        while let Value::Ref(g) = v {
+            v = self.gm.get(g)?;
+        }
+        for p in pp {
+            let g = v.child_ref(p)?;
+            v = self.gm.get(g)?;
+            while let Value::Ref(g) = v {
+                v = self.gm.get(g)?;
             }
         }
+        Some(v)
     }
 
     pub fn call_expr(&self, ex: Expr) -> Result<Value, ActionError> {
@@ -108,7 +136,7 @@ impl Scope {
         self.on_wrap(|sc| {
             for p in 0..params.len() {
                 if pnames.len() > p {
-                    sc.set_local(&pnames[p], params[p]);
+                    //TODO Set parameters
                 }
             }
             for a in actions {
@@ -125,41 +153,8 @@ impl Scope {
         })
     }
 
-    pub fn set_local(&mut self, k: &str, v: Value) {
-        if let Some(ref b) = self.base.get(self.base.len() - 1) {
-            if let Some(Value::Map(ref mut m)) = self.gm.get_mut(b) {
-                self.set_child(m, k, v)
-            }
-        }
-    }
-
-    pub fn set_child(&mut self, par: &mut BTreeMap<String, GenData>, k: &str, child: Value) {
-        let ng = self.gm.push(child);
-        match par.insert(k.to_string(), ng) {
-            Some(gd) => self.gm.dec_rc(gd),
-            None => {}
-        }
-    }
-
     pub fn set(&mut self, p: &Proto, v: Value) -> Result<Option<Value>, ActionError> {
-        //proto named var
-
-        let p2 = self.in_context(p)?;
-        //Try for local variable first
-        if let Some(vname) = p2.pp().next() {
-            if self.data.has_child(&vname.as_string()) {
-                let sr = self.data.set_at_path(p2.pp(), v);
-                return self.on_sr(sr);
-            }
-        }
-        //try parent
-        unsafe {
-            if let Parent::Mut(par) = self.parent {
-                return (&mut *par).set(p, v);
-            }
-        }
-        let sr = self.data.set_at_path(p.pp(), v);
-        self.on_sr(sr)
+        unimplemented!()
     }
 
     pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {

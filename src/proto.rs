@@ -3,10 +3,11 @@ use crate::value::Value;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
 pub enum ProtoNode {
-    Num(isize),
+    Num(usize),
     Str(String),
+    Deref,
 }
 
 impl ProtoNode {
@@ -21,10 +22,10 @@ impl ProtoNode {
         }
     }
 
-    pub fn as_num(&self) -> Option<isize> {
+    pub fn as_num(&self) -> Option<usize> {
         match self {
             ProtoNode::Num(n) => Some(*n),
-            ProtoNode::Str(s) => isize::from_str(s).ok(),
+            ProtoNode::Str(s) => usize::from_str(s).ok(),
         }
     }
 }
@@ -32,7 +33,7 @@ impl ProtoNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
     v: Vec<ProtoNode>,
-    pub dot: bool,
+    pub dots: usize,
 }
 
 impl Display for Proto {
@@ -54,22 +55,27 @@ impl Proto {
     pub fn new() -> Self {
         Proto {
             v: Vec::new(),
-            dot: false,
+            dots: 0,
         }
     }
 
     pub fn one(s: &str) -> Self {
         Proto {
             v: vec![ProtoNode::str(s)],
-            dot: false,
+            dots: 0,
         }
     }
 
-    pub fn num(n: isize) -> Self {
+    pub fn num(n: usize) -> Self {
         Proto {
             v: vec![ProtoNode::Num(n)],
-            dot: false,
+            dots: 0,
         }
+    }
+
+    pub fn dot(self) -> Self {
+        self.dots += 1;
+        self
     }
 
     pub fn as_api_func_name(&self) -> Option<&str> {
@@ -93,7 +99,7 @@ impl Proto {
     pub fn push_val(&mut self, v: Value) -> Result<(), ActionError> {
         match v {
             Value::Str(s) => self.v.push(ProtoNode::Str(s)),
-            Value::Num(n) => self.v.push(ProtoNode::Num(n)),
+            Value::Num(n) => self.v.push(ProtoNode::Num(n.abs() as usize)),
             _ => return Err(ActionError::new("proto parts must resolve to str or num")),
         }
         Ok(())

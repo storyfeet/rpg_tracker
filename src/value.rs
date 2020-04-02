@@ -3,6 +3,7 @@ use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
 //use crate::scope::Scope;
+use crate::proto::ProtoNode;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::BTreeMap;
 
@@ -13,7 +14,7 @@ pub enum Value {
     Str(String),
     Ref(GenData),
     List(Vec<GenData>),
-    Map(BTreeMap<String, GenData>),
+    Map(BTreeMap<ProtoNode, GenData>),
     ExprDef(Vec<String>, Expr),
     FuncDef(Vec<String>, Vec<Action>),
 }
@@ -44,7 +45,7 @@ impl Value {
                     res.push('\n');
                     res.extend((0..depth).map(|_| ' '));
                     if let Some(v) = gm.get(vg) {
-                        res.push_str(k);
+                        res.push_str(&k.as_string());
                         res.push(':');
                         res.push_str(&v.print(depth + 1, gm));
                     } else {
@@ -87,15 +88,22 @@ impl Value {
         res
     }
 
-    pub fn has_child(&self, s: &str) -> bool {
+    pub fn child_ref(&self, pn: &ProtoNode) -> Option<&GenData> {
         match self {
-            Value::Map(t) => t.get(s).is_some(),
-            _ => false,
+            Value::Map(t) => t.get(pn),
+            Value::List(v) => {
+                if let ProtoNode::Num(n) = pn {
+                    v.get(*n)
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 
     /// Logic Or included
-    pub fn try_add(self, rhs: Value) -> Result<Value, ActionError> {
+    pub fn try_add(self, rhs: Value, gm: &mut GenManager) -> Result<Value, ActionError> {
         use Value::*;
         match self {
             Bool(a) => match rhs {
@@ -118,10 +126,33 @@ impl Value {
                     a.extend(b);
                     Ok(List(a))
                 }
-                _ => Err(ActionError::new("Cannot add non list to list")),
+                _ => {
+                    gm.drop(self);
+                    gm.drop(rhs);
+                    Err(ActionError::new("Cannot add non list to list"))
+                }
             },
-
-            u => Err(ActionError::new(&format!("Add of {:?} not suppported", u))),
+            Map(mut ma) => {
+                if let Map(mb) = rhs {
+                    for (k, v) in mb {
+                        if let Some(d) = ma.insert(k, v) {
+                            gm.drop_ref(d)
+                        }
+                    }
+                    Ok(Value::Map(ma))
+                } else {
+                    gm.drop(self);
+                    gm.drop(rhs);
+                    Err(ActionError::new("Cannot add non map to map"))
+                }
+            }
+            //TODO Map + Map
+            u => {
+                let e = Err(ActionError::new(&format!("Add of {:?} not suppported", u)));
+                gm.drop(self);
+                gm.drop(rhs);
+                e
+            }
         }
     }
 
@@ -139,7 +170,7 @@ impl Value {
             },
             Map(mut t) => match rhs {
                 Str(s) => {
-                    t.remove(&s);
+                    t.remove(&ProtoNode::str(&s));
                     Ok(Map(t))
                 }
                 _ => Err(ActionError::new("Can only sub str from tree")),
