@@ -4,7 +4,6 @@ use std::str::FromStr;
 use crate::action::Action;
 
 use crate::expr::{Expr, MapItem, Op};
-use crate::value::Value;
 
 pub fn action() -> impl Parser<Action> {
     ws(0).ig_then(pp_action).then_ig(l_break())
@@ -55,18 +54,6 @@ fn l_break() -> impl Parser<()> {
     ws(0).then_ig(tag(";").or(tag("\n")))
 }
 
-fn value() -> impl Parser<Value> {
-    ws(0).ig_then(
-        tag("true")
-            .map(|_| Value::Bool(true))
-            .or(tag("false").map(|_| Value::Bool(false)))
-            .or(num().map(|v| Value::Num(v)))
-            .or(tag("\"")
-                .ig_then(esc('"', '\\').e_map('t', '\t'))
-                .map(|s| Value::Str(s))),
-    )
-}
-
 fn op() -> impl Parser<Op> {
     ws(0)
         .ig_then(
@@ -105,8 +92,12 @@ fn map() -> impl Parser<Vec<MapItem>> {
 
 //must not be impl<Parser<Expr>> to avoid giant objects
 fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
-    let ps = value()
-        .map(|v| Expr::Val(v))
+    let ps = (tag("true").map(|_| Expr::Bool(true)))
+        .or(tag("false").map(|_| Expr::Bool(false)))
+        .or(num().map(|v| Expr::Num(v)))
+        .or(tag("\"")
+            .ig_then(esc('"', '\\').e_map('t', '\t'))
+            .map(|s| Expr::Str(s)))
         .or(s_tag("-").ig_then(p_expr_l).map(|e| Expr::Neg(Box::new(e))))
         .or(s_tag("$").ig_then(p_expr_l).map(|e| Expr::Ref(Box::new(e))))
         .or(s_tag("(")
@@ -119,7 +110,7 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
             .map(|e| Expr::List(e)))
         .or(ident().map(|e| Expr::Ident(e)));
 
-    ps.parse(i)
+    ws(0).ig_then(ps).parse(i)
 }
 
 //Cannot be a ->impl Parser() to avoid infinite struct creation

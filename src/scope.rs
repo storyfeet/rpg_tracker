@@ -2,9 +2,9 @@ use crate::action::Action;
 use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
-use crate::nomp::p_action;
 use crate::proto::Proto;
 use crate::value::Value;
+use gobble::{LCChars, Parser};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
@@ -38,9 +38,10 @@ impl Scope {
     }
 
     pub fn handle_input(&mut self, s: &str) -> Result<(), ActionError> {
-        let mut ss = s.chars();
+        let mut ss = LCChars::str(s);
+        let ac = crate::nomp::action();
         loop {
-            match p_action(&ss) {
+            match ac.parse(&ss) {
                 Ok((ns, a)) => {
                     ss = ns;
                     match self.do_action(&a) {
@@ -57,9 +58,17 @@ impl Scope {
         }
     }
 
+    pub fn gm_mut(&mut self) -> &mut GenManager {
+        &mut self.gm
+    }
+
     pub fn run_file<P: AsRef<Path> + Debug>(&mut self, fname: P) -> Result<(), ActionError> {
         let fs = std::fs::read_to_string(&fname).map_err(|e| ActionError::new(&e.to_string()))?;
         self.handle_input(&fs)
+    }
+
+    pub fn push_mem(&mut self, v: Value) -> GenData {
+        self.gm.push(v)
     }
 
     pub fn as_ref(&self, p: Proto) -> Option<&GenData> {

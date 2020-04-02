@@ -7,6 +7,7 @@ pub enum Action {
     Set(Expr, Expr),
     AddItem(i32, String),
     RemItem(i32, String),
+    Return(Expr),
     Display(Expr),
 }
 

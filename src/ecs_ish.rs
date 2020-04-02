@@ -15,6 +15,23 @@ impl PartialEq for GenData {
 }
 
 impl GenData {
+    pub fn clone(&self, gm: &mut GenManager) -> GenData {
+        if self.strong {
+            if gm.inc_rc(self) {
+                return GenData {
+                    pos: self.pos,
+                    gen: self.gen,
+                    strong: true,
+                };
+            }
+        }
+        GenData {
+            pos: self.pos,
+            gen: self.gen,
+            strong: false,
+        }
+    }
+
     pub fn clone_strong(&self, gm: &mut GenManager) -> Option<GenData> {
         if gm.inc_rc(self) {
             Some(GenData {

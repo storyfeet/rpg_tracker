@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProtoNode {
-    Num(i32),
+    Num(isize),
     Str(String),
 }
 
@@ -21,10 +21,10 @@ impl ProtoNode {
         }
     }
 
-    pub fn as_num(&self) -> Option<i32> {
+    pub fn as_num(&self) -> Option<isize> {
         match self {
             ProtoNode::Num(n) => Some(*n),
-            ProtoNode::Str(s) => i32::from_str(s).ok(),
+            ProtoNode::Str(s) => isize::from_str(s).ok(),
         }
     }
 }
@@ -32,6 +32,7 @@ impl ProtoNode {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Proto {
     v: Vec<ProtoNode>,
+    pub dot: bool,
 }
 
 impl Display for Proto {
@@ -51,18 +52,23 @@ impl Display for Proto {
 
 impl Proto {
     pub fn new() -> Self {
-        Proto { v: Vec::new() }
+        Proto {
+            v: Vec::new(),
+            dot: false,
+        }
     }
 
     pub fn one(s: &str) -> Self {
         Proto {
             v: vec![ProtoNode::str(s)],
+            dot: false,
         }
     }
 
-    pub fn num(n: i32) -> Self {
+    pub fn num(n: isize) -> Self {
         Proto {
             v: vec![ProtoNode::Num(n)],
+            dot: false,
         }
     }
 

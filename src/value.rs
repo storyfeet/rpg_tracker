@@ -2,24 +2,25 @@ use crate::action::Action;
 use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
+//use crate::scope::Scope;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
     Bool(bool),
-    Num(i32),
+    Num(isize),
     Str(String),
     Ref(GenData),
     List(Vec<GenData>),
     Map(BTreeMap<String, GenData>),
-    ExprDef(Box<Expr>),
+    ExprDef(Vec<String>, Expr),
     FuncDef(Vec<String>, Vec<Action>),
 }
 
 impl From<usize> for Value {
     fn from(n: usize) -> Self {
-        Value::Num(n as i32)
+        Value::Num(n as isize)
     }
 }
 
@@ -51,7 +52,7 @@ impl Value {
                     }
                 }
             }
-            ExprDef(ex) => {
+            ExprDef(_, ex) => {
                 res.push_str(&ex.print());
             }
             FuncDef(params, _) => {
@@ -186,6 +187,25 @@ impl Value {
             _ => Vec::new(),
         }
     }
+
+    pub fn clone_shallow(&self, gm: &mut GenManager) -> Value {
+        match self {
+            Value::Bool(b) => Value::Bool(*b),
+            Value::Num(n) => Value::Num(*n),
+            Value::Str(s) => Value::Str(s.clone()),
+            Value::Ref(gd) => Value::Ref(gd.clone(gm)),
+            Value::List(v) => Value::List(v.iter().map(|gd| gd.clone(gm)).collect()),
+            Value::Map(m) => {
+                let res = BTreeMap::new();
+                for (k, v) in m {
+                    res.insert(k.clone(), v.clone(gm));
+                }
+                Value::Map(res)
+            }
+            Value::ExprDef(p, e) => Value::ExprDef(p.clone(), e.clone()),
+            Value::FuncDef(p, a) => Value::FuncDef(p.clone(), a.clone()),
+        }
+    }
 }
 
 impl PartialOrd for Value {
@@ -203,5 +223,3 @@ impl PartialOrd for Value {
         None
     }
 }
-
-impl Value {}

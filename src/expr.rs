@@ -1,10 +1,11 @@
+use crate::action::Action;
 use crate::error::{ActionError, LineError};
 //use crate::prev_iter::Backer;
 //use crate::prev_iter::LineCounter;
 use crate::proto::Proto;
 use crate::scope::Scope;
 use crate::value::Value;
-use gobble::err::{ParseError,ECode};
+use gobble::err::ECode;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
@@ -68,51 +69,56 @@ impl Op {
     }
 }
 
-
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct MapItem {
     k: String,
     v: Expr,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum Expr {
-    Val(Value),
+    Bool(bool),
+    Num(i64),
+    Str(String),
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
-    Ref(Box<Expr>),
-    Ident(String),
+    DotStart(Box<Expr>),
     List(Vec<Expr>),
     Map(Vec<MapItem>),
     Call(Box<Expr>, Vec<Expr>),
+    ExprDef(Vec<String>, Box<Expr>),
+    FuncDef(Vec<String>, Vec<Action>),
 }
 
-
 impl Expr {
-    pub fn num(n: i32) -> Self {
-        Expr::Val(Value::Num(n))
-    }
     pub fn neg(e: Expr) -> Self {
         Expr::Neg(Box::new(e))
     }
 
-    pub fn eval_path(&self,sc: &Scope)->Result<Proto,ActionError>{
+    pub fn eval_path(&self, sc: &mut Scope) -> Result<Proto, ActionError> {
         use Expr::*;
-        Ok(match self{
-            Val(Value::Num(n))=>Proto::num(*n),
-            Val(Value::Str(s))=>Proto::one(s),
-            Ident(s)=>Proto::one(s),
-            Oper(Op::Dot,a,b)=>a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
-            _=>return Err(ActionError::new("Could not treat as proto" )),
+        Ok(match self {
+            Num(n) => Proto::num(n),
+            Str(s) => Proto::one(s),
+            Oper(Op::Dot, a, b) => a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
+            ot => match ot.eval(sc)?{
+                Value::Num(n)=>Proto::num(n),
+                Value::Str(s)=>Proto::one(s),
+                ov => {
+                    ov.gen_drop(sc.gm_mut());
+                    return Err(ActionError::new("Could not treat as proto")),
+                }
+
+            }
         })
     }
 
-    pub fn eval(&self, scope: &Scope) -> Result<Value, ActionError> {
+    pub fn eval(&self, scope: &mut Scope) -> Result<Value, ActionError> {
         //println!("eval {}",self.print());
         use Expr::*;
         Ok(match self {
-            Val(n) => n.clone(),
+            Val(n) => n.clone(scope),
             Bracket(a) => a.eval(scope)?,
             Neg(a) => a.eval(scope)?.try_neg()?,
             Oper(Op::Add, a, b) => a.eval(scope)?.try_add(b.eval(scope)?)?,
@@ -123,20 +129,15 @@ impl Expr {
             Oper(Op::Less, a, b) => Value::Bool(a.eval(scope)? < b.eval(scope)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(scope)? == b.eval(scope)?),
             Oper(Op::Dot, a, b) => {
-                let proto = self.eval_path(scope);
-                Value::Proto
+                let proto = self.eval_path(scope)?;
+                Value::Ref(proto)
             }
-            List(ref l) => {
-                let mut vl = Vec::new();
-                eval_list_expr(l, &mut vl, scope)?;
-                Value::List(vl)
-            }
+            List(ref l) => Value::List(l.iter().map(|e| scope.push_mem(e.eval(scope))).collect()),
             Map(ref l) => {
                 let mut t = BTreeMap::new();
                 eval_map_expr(l, &mut t, scope)?;
                 Value::Map(t)
             }
-            Ident(s) => let p Value::Proto(Proto::one(s)),
             Oper(Op::Dot, a, b) => Value::Proto(Proto::join(a.eval(scope)?, b.eval(scope)?)?),
         })
     }
