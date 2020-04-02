@@ -127,7 +127,9 @@ impl Value {
                     Ok(List(a))
                 }
                 _ => {
-                    gm.drop(self);
+                    for i in a {
+                        gm.drop_ref(i);
+                    }
                     gm.drop(rhs);
                     Err(ActionError::new("Cannot add non list to list"))
                 }
@@ -141,7 +143,9 @@ impl Value {
                     }
                     Ok(Value::Map(ma))
                 } else {
-                    gm.drop(self);
+                    for (_, v) in ma {
+                        gm.drop_ref(v);
+                    }
                     gm.drop(rhs);
                     Err(ActionError::new("Cannot add non map to map"))
                 }
@@ -149,7 +153,7 @@ impl Value {
             //TODO Map + Map
             u => {
                 let e = Err(ActionError::new(&format!("Add of {:?} not suppported", u)));
-                gm.drop(self);
+                gm.drop(u);
                 gm.drop(rhs);
                 e
             }
@@ -167,6 +171,7 @@ impl Value {
             List(a) => match rhs {
                 List(b) => Ok(List(a.into_iter().filter(|x| !b.contains(&x)).collect())),
                 Ref(v) => Ok(List(a.into_iter().filter(|x| *x != v).collect())),
+                _ => unimplemented!(),
             },
             Map(mut t) => match rhs {
                 Str(s) => {
@@ -213,29 +218,54 @@ impl Value {
     pub fn gen_drop(self) -> Vec<GenData> {
         match self {
             Value::List(v) => v,
-            Value::Map(m) => m.into_iter().map(|(k, v)| v).collect(),
+            Value::Map(m) => m.into_iter().map(|(_, v)| v).collect(),
             Value::Ref(r) => vec![r],
             _ => Vec::new(),
         }
     }
 
-    pub fn clone_shallow(&self, gm: &mut GenManager) -> Value {
+    pub fn clone_ignore_rc(&self) -> Value {
         match self {
             Value::Bool(b) => Value::Bool(*b),
             Value::Num(n) => Value::Num(*n),
             Value::Str(s) => Value::Str(s.clone()),
-            Value::Ref(gd) => Value::Ref(gd.clone(gm)),
-            Value::List(v) => Value::List(v.iter().map(|gd| gd.clone(gm)).collect()),
+            Value::Ref(gd) => Value::Ref(gd.clone_ignore_gm()),
+            Value::List(v) => Value::List(v.iter().map(|gd| gd.clone_ignore_gm()).collect()),
             Value::Map(m) => {
-                let res = BTreeMap::new();
+                let mut res = BTreeMap::new();
                 for (k, v) in m {
-                    res.insert(k.clone(), v.clone(gm));
+                    res.insert(k.clone(), v.clone_ignore_gm());
                 }
                 Value::Map(res)
             }
             Value::ExprDef(p, e) => Value::ExprDef(p.clone(), e.clone()),
             Value::FuncDef(p, a) => Value::FuncDef(p.clone(), a.clone()),
         }
+    }
+
+    pub fn rc_up(&self, gm: &mut GenManager) {
+        match self {
+            Value::List(l) => {
+                for i in l {
+                    gm.inc_rc(i);
+                }
+            }
+            Value::Map(m) => {
+                for v in m.values() {
+                    gm.inc_rc(v);
+                }
+            }
+            Value::Ref(r) => {
+                gm.inc_rc(r);
+            }
+            _ => {}
+        }
+    }
+
+    pub fn clone_shallow(&self, gm: &mut GenManager) -> Value {
+        let res = self.clone_ignore_rc();
+        res.rc_up(gm);
+        res
     }
 }
 

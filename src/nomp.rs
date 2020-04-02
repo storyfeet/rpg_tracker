@@ -108,7 +108,7 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
             .ig_then(list())
             .then_ig(s_tag("]"))
             .map(|e| Expr::List(e)))
-        .or(ident().map(|e| Expr::Str(e)));
+        .or(ident().map(|e| Expr::Ident(e)));
 
     ws(0).ig_then(ps).parse(i)
 }

@@ -19,6 +19,7 @@ impl ProtoNode {
         match self {
             ProtoNode::Num(n) => n.to_string(),
             ProtoNode::Str(s) => s.clone(),
+            ProtoNode::Deref => String::new(),
         }
     }
 
@@ -26,6 +27,7 @@ impl ProtoNode {
         match self {
             ProtoNode::Num(n) => Some(*n),
             ProtoNode::Str(s) => usize::from_str(s).ok(),
+            ProtoNode::Deref => None,
         }
     }
 }
@@ -45,6 +47,7 @@ impl Display for Proto {
             match node {
                 ProtoNode::Num(n) => write!(f, "{}", n)?,
                 ProtoNode::Str(s) => write!(f, "{}", s.replace(".", "\\."))?,
+                ProtoNode::Deref => write!(f, "DEREF")?,
             }
         }
         Ok(())
@@ -73,7 +76,7 @@ impl Proto {
         }
     }
 
-    pub fn dot(self) -> Self {
+    pub fn dot(mut self) -> Self {
         self.dots += 1;
         self
     }

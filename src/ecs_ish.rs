@@ -15,6 +15,13 @@ impl PartialEq for GenData {
 }
 
 impl GenData {
+    pub fn clone_ignore_gm(&self) -> GenData {
+        GenData {
+            pos: self.pos,
+            gen: self.gen,
+            strong: self.strong,
+        }
+    }
     pub fn clone(&self, gm: &mut GenManager) -> GenData {
         if self.strong {
             if gm.inc_rc(self) {
@@ -83,7 +90,7 @@ impl GenManager {
     }
 
     pub fn get_mut<'a>(&'a mut self, gd: &GenData) -> Option<&'a Value> {
-        let mut rs = self.items.get(gd.pos)?;
+        let rs = self.items.get(gd.pos)?;
         if gd.gen != rs.gen {
             return None;
         }

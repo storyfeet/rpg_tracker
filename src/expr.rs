@@ -71,8 +71,8 @@ impl Op {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct MapItem {
-    k: String,
-    v: Expr,
+    pub k: String,
+    pub v: Expr,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -80,6 +80,7 @@ pub enum Expr {
     Bool(bool),
     Num(isize),
     Str(String),
+    Ident(String),
     Oper(Op, Box<Expr>, Box<Expr>),
     Bracket(Box<Expr>),
     Neg(Box<Expr>),
@@ -102,6 +103,7 @@ impl Expr {
         Ok(match self {
             Num(n) => Proto::num(*n as usize),
             Str(s) => Proto::one(s),
+            Ident(s) => Proto::one(s),
             DotStart(e) => e.eval_path(sc)?.dot(),
             Oper(Op::Dot, a, b) => a.eval_path(sc)?.extend_new(b.eval_path(sc)?.pp()),
             ot => match ot.eval(sc)? {
@@ -132,10 +134,12 @@ impl Expr {
             Oper(Op::Greater, a, b) => Value::Bool(a.eval(sc)? > b.eval(sc)?),
             Oper(Op::Less, a, b) => Value::Bool(a.eval(sc)? < b.eval(sc)?),
             Oper(Op::Equal, a, b) => Value::Bool(a.eval(sc)? == b.eval(sc)?),
-            Oper(Op::Dot, _, _) => {
+            Oper(Op::Dot, _, _) | Ident(_) | DotStart(_) => {
                 let proto = self.eval_path(sc)?;
                 let v = sc.get(&proto).ok_or(ActionError::new("Nothing at path"))?;
-                v.clone_shallow(sc.gm_mut())
+                let vs = v.clone_ignore_rc();
+                vs.rc_up(sc.gm_mut());
+                vs
             }
             List(ref l) => {
                 let mut res = Vec::new();
@@ -149,10 +153,11 @@ impl Expr {
                 let mut res = BTreeMap::new();
                 for e in l {
                     let v = e.v.eval(sc)?;
-                    res.insert(ProtoNode::Str(e.k), sc.push_mem(v));
+                    res.insert(ProtoNode::str(&e.k), sc.push_mem(v));
                 }
                 Value::Map(res)
             }
+            _ => unimplemented!(),
         })
     }
 
