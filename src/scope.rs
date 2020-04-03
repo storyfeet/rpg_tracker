@@ -57,7 +57,7 @@ impl Scope {
         let ac = crate::nomp::action();
         loop {
             let (ns, a) = ac.parse(&ss)?;
-            println!("Action = {:?}", a);
+            //println!("Action = {:?}", a);
             ss = ns;
             match self.do_action(&a) {
                 //TODO consider writing file
@@ -93,29 +93,37 @@ impl Scope {
                     last = i;
                 }
             }
-            last
+            last + p.dots
         };
         self.bases.get(n).map(|v| &v.gd)
     }
 
     pub fn get<'a>(&'a self, p: &Proto) -> Option<&'a Value> {
         let b = self.select_base(p)?.clone_ignore_gm();
-        return self.get_from(&b, p.pp());
+        self.get_from(&b, p.pp()).map(|(_, v)| v)
     }
 
-    pub fn get_from<'a>(&'a self, base: &GenData, pp: ProtoP) -> Option<&'a Value> {
+    pub fn get_ref(&self, p: &Proto) -> Option<GenData> {
+        let b = self.select_base(p)?.clone_ignore_gm();
+        self.get_from(&b, p.pp()).map(|(r, _)| r)
+    }
+
+    pub fn get_from<'a>(&'a self, base: &GenData, pp: ProtoP) -> Option<(GenData, &'a Value)> {
         let mut v = self.gm.get(base)?;
+        let mut lg = base;
         while let Value::Ref(g) = v {
+            lg = g;
             v = self.gm.get(g)?;
         }
         for p in pp {
-            let g = v.child_ref(p)?;
-            v = self.gm.get(g)?;
+            lg = v.child_ref(p)?;
+            v = self.gm.get(lg)?;
             while let Value::Ref(g) = v {
+                lg = g;
                 v = self.gm.get(g)?;
             }
         }
-        Some(v)
+        Some((lg.clone_ignore_gm(), v))
     }
 
     pub fn get_or_make_child(
@@ -233,6 +241,24 @@ impl Scope {
         })
     }
 
+    pub fn colon_select(&mut self, p: &Proto) -> Result<Option<Value>, ActionError> {
+        let r = self
+            .get_ref(&p)
+            .ok_or(ActionError::new("Could not set path to non path"))?;
+        let rc = r.clone_ignore_gm();
+        self.gm.inc_rc(&rc);
+        let nb = Base {
+            gd: rc,
+            swap_off: true,
+        };
+        let blast = self.bases.len() - 1;
+        match self.bases[blast].swap_off {
+            true => self.bases[blast] = nb,
+            false => self.bases.push(nb),
+        }
+        Ok(None)
+    }
+
     pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
         match a {
             Action::NoOp => Ok(None),
@@ -245,6 +271,16 @@ impl Scope {
                 let v = p_ex.eval(self)?;
                 println!(" - {}", v.print(0, &self.gm));
                 Ok(None)
+            }
+            Action::Select(p_ex) => {
+                let p = p_ex.eval_path(self)?;
+                self.colon_select(&p)
+            }
+            Action::SetSelect(p_ex, v_ex) => {
+                let p = p_ex.eval_path(self)?;
+                let v = v_ex.eval(self)?;
+                self.set(&p, v)?;
+                self.colon_select(&p)
             }
             _ => unimplemented!(),
         }

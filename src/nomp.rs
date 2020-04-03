@@ -26,7 +26,7 @@ pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
         return Ok((r, v));
     }
 
-    let (r, l_ex) = p_expr_l.parse(i)?;
+    let (r, l_ex) = p_expr.parse(i)?;
     if let Ok((r2, _)) = s_tag(":").parse(&r) {
         return Ok((r2, Action::Select(l_ex)));
     }
@@ -34,6 +34,9 @@ pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
         return Ok((r2, Action::OpSet(oper, l_ex, ex2)));
     }
     if let Ok((r2, r_ex)) = s_tag("=").ig_then(p_expr).parse(&r) {
+        if let Ok((r3, _)) = s_tag(":").parse(&r2) {
+            return Ok((r3, Action::SetSelect(l_ex, r_ex)));
+        }
         return Ok((r2, Action::Set(l_ex, r_ex)));
     }
     Ok((r, Action::Display(l_ex)))

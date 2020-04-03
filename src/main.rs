@@ -11,7 +11,7 @@ mod scope;
 mod value;
 
 use crate::error::ActionError;
-use gobble::ParseError;
+use gobble::{ECode, ParseError};
 use scope::Scope;
 use std::io::Write;
 use std::path::Path;
@@ -55,8 +55,12 @@ fn main() -> Result<(), failure::Error> {
             _ => {}
         }
         if let Err(e) = scope.handle_input(&input) {
-            if let ActionError::ParseError(ParseError::EOF) = e {
-            } else {
+            if let ActionError::ParseErr(ParseError {
+                code: ECode::EOF,
+                line: _,
+                col: _,
+            }) = e
+            {
                 println!("{}", e);
             }
         }

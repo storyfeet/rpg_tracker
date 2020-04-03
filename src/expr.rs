@@ -43,7 +43,7 @@ impl Op {
     pub fn rank(&self) -> i32 {
         use Op::*;
         match self {
-            Dot => 11,
+            Dot => 0,
             Add => 10,
             Sub => 9,
             Mul => 8,
