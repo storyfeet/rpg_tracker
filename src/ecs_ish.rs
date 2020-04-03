@@ -89,12 +89,14 @@ impl GenManager {
         rs.val.as_ref()
     }
 
-    pub fn get_mut<'a>(&'a mut self, gd: &GenData) -> Option<&'a Value> {
-        let rs = self.items.get(gd.pos)?;
-        if gd.gen != rs.gen {
+    pub fn get_mut<'a>(&'a mut self, gd: &GenData) -> Option<&'a mut Value> {
+        if gd.pos >= self.items.len() {
             return None;
         }
-        rs.val.as_ref()
+        if self.items[gd.pos].gen != gd.gen {
+            return None;
+        }
+        self.items[gd.pos].val.as_mut()
     }
 
     pub fn push(&mut self, v: Value) -> GenData {

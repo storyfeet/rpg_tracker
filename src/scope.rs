@@ -57,7 +57,7 @@ impl Scope {
         let ac = crate::nomp::action();
         loop {
             let (ns, a) = ac.parse(&ss)?;
-            print!("Action = {:?}", a);
+            println!("Action = {:?}", a);
             ss = ns;
             match self.do_action(&a) {
                 //TODO consider writing file
@@ -118,7 +118,11 @@ impl Scope {
         Some(v)
     }
 
-    pub fn get_or_make_child(self, v: &mut Value, p: &ProtoNode) -> Result<GenData, ActionError> {
+    pub fn get_or_make_child(
+        &mut self,
+        v: &mut Value,
+        p: &ProtoNode,
+    ) -> Result<GenData, ActionError> {
         match v {
             Value::Map(m) => match m.get(&p) {
                 Some(v) => Ok(v.clone(&mut self.gm)),
@@ -132,25 +136,57 @@ impl Scope {
         }
     }
 
-    pub fn set(&mut self, p: &Proto, v: Value) -> Result<Option<Value>, ActionError> {
+    pub fn set(&mut self, p: &Proto, v: Value) -> Result<(), ActionError> {
         let b = self
             .select_base(p)
             .ok_or(ActionError::new("No base"))?
             .clone_ignore_gm();
-        self.set_from(b, p.pp())
+        self.set_from(b, p.pp(), v)
     }
 
     pub fn set_from(
         &mut self,
-        b: GenData,
+        mut c_gd: GenData,
         mut pp: ProtoP,
         nval: Value,
-    ) -> Result<Option<Value>, ActionError> {
-        let mut curr = b;
-        let mut cval = self.gm.get_mut(&curr).ok_or(ActionError::new("no base"))?;
+    ) -> Result<(), ActionError> {
+        if pp.remaining() == 0 {
+            return Err(ActionError::new("empty path"));
+        }
         while pp.remaining() > 1 {
-            let pv = pp.next().expect("pp remaining >1 shold not fail");
-            curr = self.get_or_make_child(&mut cval, pv)?;
+            let p = pp.next().unwrap();
+            let n_gd = self.gm.push(Value::map());
+            let v = self
+                .gm
+                .get_mut(&c_gd)
+                .ok_or(ActionError::new("no base or deeper problem"))?;
+            c_gd = match v.try_give_child(p, &n_gd) {
+                Some((true, g)) => g,
+                Some((false, g)) => {
+                    self.gm.drop_ref(n_gd);
+                    g
+                }
+                None => {
+                    self.gm.drop_ref(n_gd);
+                    return Err(ActionError::new("Could not give child"));
+                }
+            };
+        }
+        let val_ref = self.gm.push(nval);
+        let v = self
+            .gm
+            .get_mut(&c_gd)
+            .ok_or(ActionError::new("no base or deeper problem"))?;
+        match v.give_child(pp.next().unwrap().clone(), val_ref.clone_ignore_gm()) {
+            Ok(Some(gdrop)) => {
+                self.gm.drop_ref(gdrop);
+                Ok(())
+            }
+            Ok(None) => Ok(()),
+            Err(e) => {
+                self.gm.drop_ref(val_ref);
+                Err(e)
+            }
         }
     }
 
@@ -203,7 +239,7 @@ impl Scope {
             Action::Set(p_ex, v_ex) => {
                 let p = p_ex.eval_path(self)?;
                 let v = v_ex.eval(self)?;
-                self.set(&p, v)
+                self.set(&p, v).map(|_| None)
             }
             Action::Display(p_ex) => {
                 let v = p_ex.eval(self)?;

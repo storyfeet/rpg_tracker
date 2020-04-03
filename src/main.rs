@@ -10,6 +10,8 @@ mod scope;
 //mod screen;
 mod value;
 
+use crate::error::ActionError;
+use gobble::ParseError;
 use scope::Scope;
 use std::io::Write;
 use std::path::Path;
@@ -53,7 +55,10 @@ fn main() -> Result<(), failure::Error> {
             _ => {}
         }
         if let Err(e) = scope.handle_input(&input) {
-            println!("{}", e);
+            if let ActionError::ParseError(ParseError::EOF) = e {
+            } else {
+                println!("{}", e);
+            }
         }
     }
 }

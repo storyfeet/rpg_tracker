@@ -268,6 +268,34 @@ impl Value {
         res.rc_up(gm);
         res
     }
+
+    pub fn give_child(
+        &mut self,
+        pn: ProtoNode,
+        gd: GenData,
+    ) -> Result<Option<GenData>, ActionError> {
+        match self {
+            Value::Map(m) => Ok(m.insert(pn, gd)),
+            Value::Ref(_) => unimplemented!("Try Give Child needs Ref"),
+            Value::List(_) => unimplemented!("Try Give Child needs List"),
+            _ => Err(ActionError::new("Not childable type")),
+        }
+    }
+    pub fn try_give_child(&mut self, pn: &ProtoNode, gd: &GenData) -> Option<(bool, GenData)> {
+        match self {
+            Value::Map(m) => {
+                if let Some(gr) = m.get(&pn) {
+                    return Some((false, gr.clone_ignore_gm()));
+                } else {
+                    m.insert(pn.clone(), gd.clone_ignore_gm());
+                    return Some((true, gd.clone_ignore_gm()));
+                }
+            }
+            Value::Ref(r) => unimplemented!("Try Give Child needs Ref"),
+            Value::List(r) => unimplemented!("Try Give Child needs List"),
+            _ => return None,
+        }
+    }
 }
 
 impl PartialOrd for Value {
