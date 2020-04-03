@@ -6,7 +6,10 @@ use crate::action::Action;
 use crate::expr::{Expr, MapItem, Op};
 
 pub fn action() -> impl Parser<Action> {
-    ws(0).ig_then(pp_action).then_ig(l_break())
+    ws(0)
+        .ig_then(pp_action)
+        .then_ig(l_break())
+        .or(l_break().map(|_| Action::NoOp))
 }
 
 pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
@@ -17,7 +20,8 @@ pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
         .or(s_tag("-")
             .ig_then(maybe(num()))
             .then(ident())
-            .map(|(nop, s)| Action::AddItem(nop.unwrap_or(1), s)));
+            .map(|(nop, s)| Action::RemItem(nop.unwrap_or(1), s)))
+        .or(s_tag("return").ig_then(p_expr).map(|e| Action::Return(e)));
     if let Ok((r, v)) = ps.parse(i) {
         return Ok((r, v));
     }

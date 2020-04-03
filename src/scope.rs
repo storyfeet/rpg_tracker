@@ -2,7 +2,7 @@ use crate::action::Action;
 use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
-use crate::proto::{Proto, ProtoP};
+use crate::proto::{Proto, ProtoNode, ProtoP};
 use crate::value::Value;
 use gobble::{LCChars, Parser};
 //use std::collections::BTreeMap;
@@ -59,14 +59,14 @@ impl Scope {
             let (ns, a) = ac.parse(&ss)?;
             print!("Action = {:?}", a);
             ss = ns;
-            /*match self.do_action(&a) {
+            match self.do_action(&a) {
                 //TODO consider writing file
                 Ok(Some(v)) => {
                     println!("{}", v.print(0, &self.gm));
                 }
                 Ok(None) => {}
                 Err(e) => println!("Error {}", e),
-            }*/
+            }
         }
     }
 
@@ -118,6 +118,42 @@ impl Scope {
         Some(v)
     }
 
+    pub fn get_or_make_child(self, v: &mut Value, p: &ProtoNode) -> Result<GenData, ActionError> {
+        match v {
+            Value::Map(m) => match m.get(&p) {
+                Some(v) => Ok(v.clone(&mut self.gm)),
+                None => Ok(self.gm.push(Value::map())),
+            },
+            //Value::List(l)=>
+            //Ref::
+            _ => Err(ActionError::new(
+                "Cannot give child to Non Map or List Value",
+            )),
+        }
+    }
+
+    pub fn set(&mut self, p: &Proto, v: Value) -> Result<Option<Value>, ActionError> {
+        let b = self
+            .select_base(p)
+            .ok_or(ActionError::new("No base"))?
+            .clone_ignore_gm();
+        self.set_from(b, p.pp())
+    }
+
+    pub fn set_from(
+        &mut self,
+        b: GenData,
+        mut pp: ProtoP,
+        nval: Value,
+    ) -> Result<Option<Value>, ActionError> {
+        let mut curr = b;
+        let mut cval = self.gm.get_mut(&curr).ok_or(ActionError::new("no base"))?;
+        while pp.remaining() > 1 {
+            let pv = pp.next().expect("pp remaining >1 shold not fail");
+            curr = self.get_or_make_child(&mut cval, pv)?;
+        }
+    }
+
     pub fn call_expr(&mut self, ex: Expr) -> Result<Value, ActionError> {
         self.on_wrap(|sc| ex.eval(sc))
     }
@@ -161,15 +197,26 @@ impl Scope {
         })
     }
 
-    pub fn set(&mut self, _p: &Proto, _v: Value) -> Result<Option<Value>, ActionError> {
-        unimplemented!()
-    }
-
-    pub fn do_action(&mut self, _a: &Action) -> Result<Option<Value>, ActionError> {
-        fn err(s: &str) -> ActionError {
-            ActionError::new(s)
-        };
-        unimplemented!()
-        //match a {
+    pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
+        match a {
+            Action::NoOp => Ok(None),
+            Action::Set(p_ex, v_ex) => {
+                let p = p_ex.eval_path(self)?;
+                let v = v_ex.eval(self)?;
+                self.set(&p, v)
+            }
+            Action::Display(p_ex) => {
+                let v = p_ex.eval(self)?;
+                println!(" - {}", v.print(0, &self.gm));
+                Ok(None)
+            }
+            _ => unimplemented!(),
+        }
+        /*Select(Expr),
+        OpSet(Op, Expr, Expr),
+        AddItem(isize, String),
+        RemItem(isize, String),
+        Return(Expr),
+        */
     }
 }

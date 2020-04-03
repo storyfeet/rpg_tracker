@@ -2,6 +2,7 @@ use crate::expr::{Expr, Op};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
+    NoOp,
     Select(Expr),
     OpSet(Op, Expr, Expr),
     Set(Expr, Expr),

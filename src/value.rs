@@ -98,6 +98,7 @@ impl Value {
                     None
                 }
             }
+            Value::Ref(v) => Some(v),
             _ => None,
         }
     }
