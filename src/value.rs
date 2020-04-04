@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq)]
 pub enum Value {
+    Null,
     Bool(bool),
     Num(isize),
     Str(String),
@@ -36,11 +37,12 @@ impl Value {
 
     pub fn print(&self, depth: usize, gm: &GenManager) -> String {
         use Value::*;
-        let mut res = String::new();
         match self {
-            Bool(b) => res.push_str(&b.to_string()),
-            Num(n) => res.push_str(&n.to_string()),
+            Null => "NULL".to_string(),
+            Bool(b) => b.to_string(),
+            Num(n) => n.to_string(),
             Map(t) => {
+                let mut res = String::new();
                 for (k, vg) in t {
                     res.push('\n');
                     res.extend((0..depth).map(|_| ' '));
@@ -52,15 +54,12 @@ impl Value {
                         res.push_str("Freeed Pointer Err");
                     }
                 }
+                res
             }
-            ExprDef(_, ex) => {
-                res.push_str(&ex.print());
-            }
-            FuncDef(params, _) => {
-                res.push_str(&format!("func{:?}", params));
-            }
+            ExprDef(_, ex) => ex.print(),
+            FuncDef(params, _) => format!("func{:?}", params),
             List(l) => {
-                res.push('[');
+                let mut res = "[".to_string();
                 for (i, vg) in l.iter().enumerate() {
                     if i != 0 {
                         res.push(',');
@@ -71,21 +70,21 @@ impl Value {
                         res.push_str("Freeed Pointer Err");
                     }
                 }
-
                 res.push(']');
+                res
             }
-            Str(s) => res.push_str(&format!("\"{}\"", s)),
+            Str(s) => format!("\"{}\"", s),
 
             Ref(vg) => {
-                res.push('$');
+                let mut res = "$".to_string();
                 if let Some(v) = gm.get(vg) {
                     res.push_str(&v.print(0, gm));
                 } else {
                     res.push_str("Freeed Pointer Err");
                 }
+                res
             }
         }
-        res
     }
 
     pub fn child_ref(&self, pn: &ProtoNode) -> Option<&GenData> {
@@ -227,6 +226,7 @@ impl Value {
 
     pub fn clone_ignore_rc(&self) -> Value {
         match self {
+            Value::Null => Value::Null,
             Value::Bool(b) => Value::Bool(*b),
             Value::Num(n) => Value::Num(*n),
             Value::Str(s) => Value::Str(s.clone()),
@@ -291,8 +291,8 @@ impl Value {
                     return Some((true, gd.clone_ignore_gm()));
                 }
             }
-            Value::Ref(r) => unimplemented!("Try Give Child needs Ref"),
-            Value::List(r) => unimplemented!("Try Give Child needs List"),
+            Value::Ref(_r) => unimplemented!("Try Give Child needs Ref"),
+            Value::List(_r) => unimplemented!("Try Give Child needs List"),
             _ => return None,
         }
     }

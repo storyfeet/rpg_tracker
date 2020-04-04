@@ -1,4 +1,14 @@
+use crate::error::ActionError;
 use crate::expr::{Expr, Op};
+use crate::value::Value;
+
+pub type AcResult = Result<(AcReturn, Value), ActionError>;
+
+pub enum AcReturn {
+    No,
+    Func,
+    //Expr,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
@@ -9,16 +19,6 @@ pub enum Action {
     Set(Expr, Expr),
     AddItem(isize, String),
     RemItem(isize, String),
+    Resolve(Expr),
     Return(Expr),
-    Display(Expr),
-}
-
-impl Action {
-    //if the function should be added to the history file?
-    pub fn is_fileworthy(&self) -> bool {
-        match self {
-            Action::Display(_) => false,
-            _ => true,
-        }
-    }
 }

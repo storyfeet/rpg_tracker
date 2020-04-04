@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::action::{AcResult, AcReturn, Action};
 use crate::error::ActionError;
 //use crate::prev_iter::Backer;
 //use crate::prev_iter::LineCounter;
@@ -8,6 +8,14 @@ use crate::value::Value;
 use gobble::err::ECode;
 use std::collections::BTreeMap;
 use std::str::FromStr;
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum EvReturn {
+    Func,
+    Expr,
+    No,
+    //  Break(usize),
+}
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum Op {
@@ -89,6 +97,7 @@ pub enum Expr {
     Deref(Box<Expr>),
     List(Vec<Expr>),
     Map(Vec<MapItem>),
+    If(Box<Expr>, Vec<Action>, Vec<Action>),
     Call(Box<Expr>, Vec<Expr>),
     ExprDef(Vec<String>, Box<Expr>),
     FuncDef(Vec<String>, Vec<Action>),
@@ -160,10 +169,33 @@ impl Expr {
                 }
                 Value::Map(res)
             }
+            If(bex, l_block, r_block) => {
+                let v = bex.eval(sc)?;
+                let op = match v {
+                    Value::Bool(true) => l_block,
+                    Value::Bool(false) => r_block,
+                    _ => return Err(ActionError::new("If only works on bool expr")),
+                };
+                sc.on_wrap(|sc2| sc2.do_actions(op)).map(|v| v.1)?
+            }
             _ => unimplemented!(),
         })
     }
 
+    pub fn eval_action(&self, sc: &mut Scope) -> AcResult {
+        match self {
+            Self::If(bex, l_block, r_block) => {
+                let v = bex.eval(sc)?;
+                let op = match v {
+                    Value::Bool(true) => l_block,
+                    Value::Bool(false) => r_block,
+                    _ => return Err(ActionError::new("If only works on bool expr")),
+                };
+                sc.on_wrap(|sc2| sc2.do_actions(op))
+            }
+            _ => self.eval(sc).map(|v| (AcReturn::No, v)),
+        }
+    }
     pub fn add_left(self, lf: Expr, op: Op) -> Self {
         match self {
             Expr::Oper(sop, sa, sb) => {

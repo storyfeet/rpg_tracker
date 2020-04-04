@@ -12,6 +12,10 @@ pub fn action() -> impl Parser<Action> {
         .or(l_break().map(|_| Action::NoOp))
 }
 
+pub fn action_list() -> impl Parser<Vec<Action>> {
+    sep(pp_action, l_break(), true)
+}
+
 pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
     let ps = s_tag("+")
         .ig_then(maybe(num()))
@@ -39,7 +43,7 @@ pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
         }
         return Ok((r2, Action::Set(l_ex, r_ex)));
     }
-    Ok((r, Action::Display(l_ex)))
+    Ok((r, Action::Resolve(l_ex)))
 }
 
 fn ident() -> impl Parser<String> {
@@ -77,10 +81,11 @@ fn op() -> impl Parser<Op> {
         .try_map(|c| Op::from_str(c))
 }
 
-fn list() -> impl Parser<Vec<Expr>> {
+fn list() -> impl Parser<Expr> {
     s_tag("[")
         .ig_then(sep(p_expr, s_tag(","), false))
         .then_ig(s_tag("]"))
+        .map(|l| Expr::List(l))
 }
 
 fn map_item() -> impl Parser<MapItem> {
@@ -90,10 +95,30 @@ fn map_item() -> impl Parser<MapItem> {
         .map(|(k, v)| MapItem { k, v })
 }
 
-fn map() -> impl Parser<Vec<MapItem>> {
+fn map() -> impl Parser<Expr> {
     s_tag("{")
         .ig_then(repeat(map_item().then_ig(maybe(s_tag(","))), 0))
         .then_ig(s_tag("}"))
+        .map(|e| Expr::Map(e))
+}
+
+fn code_block() -> impl Parser<Vec<Action>> {
+    s_tag("{").ig_then(action_list()).then_ig(s_tag("}"))
+}
+
+fn if_clause() -> impl Parser<Expr> {
+    //Todo Consider Elif: Done right, wont even effect anything else
+    s_tag("if")
+        .ig_then(p_expr)
+        .then(code_block())
+        .then(maybe(s_tag("else").ig_then(code_block())))
+        .map(|((bex, lblk), rop)| {
+            if let Some(rblk) = rop {
+                Expr::If(Box::new(bex), lblk, rblk)
+            } else {
+                Expr::If(Box::new(bex), lblk, Vec::new())
+            }
+        })
 }
 
 //must not be impl<Parser<Expr>> to avoid giant objects
@@ -116,8 +141,9 @@ fn p_expr_l<'a>(i: &LCChars<'a>) -> ParseRes<'a, Expr> {
             .ig_then(p_expr)
             .then_ig(s_tag(")"))
             .map(|e| Expr::Bracket(Box::new(e))))
-        .or(list().map(|e| Expr::List(e)))
-        .or(map().map(|e| Expr::Map(e)))
+        .or(list())
+        .or(map())
+        .or(if_clause())
         .or(ident().map(|e| Expr::Ident(e)));
 
     ws(0).ig_then(ps).parse(i)

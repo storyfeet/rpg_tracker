@@ -61,6 +61,7 @@ fn main() -> Result<(), failure::Error> {
                 col: _,
             }) = e
             {
+            } else {
                 println!("{}", e);
             }
         }

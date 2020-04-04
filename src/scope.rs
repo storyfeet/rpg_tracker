@@ -1,4 +1,4 @@
-use crate::action::Action;
+use crate::action::{AcResult, AcReturn, Action};
 use crate::ecs_ish::{GenData, GenManager};
 use crate::error::ActionError;
 use crate::expr::Expr;
@@ -61,10 +61,10 @@ impl Scope {
             ss = ns;
             match self.do_action(&a) {
                 //TODO consider writing file
-                Ok(Some(v)) => {
+                Ok(Value::Null) => {}
+                Ok(v) => {
                     println!("{}", v.print(0, &self.gm));
                 }
-                Ok(None) => {}
                 Err(e) => println!("Error {}", e),
             }
         }
@@ -220,28 +220,18 @@ impl Scope {
         pnames: &[String],
         actions: &[Action],
         params: Vec<Value>,
-    ) -> Result<Option<Value>, ActionError> {
+    ) -> Result<Value, ActionError> {
         self.on_wrap(|sc| {
             for p in 0..params.len() {
                 if pnames.len() > p {
                     //TODO Set parameters
                 }
             }
-            for a in actions {
-                let done = sc.do_action(a);
-                match done {
-                    Ok(Some(v)) => {
-                        return Ok(Some(v));
-                    }
-                    Err(e) => return Err(e),
-                    Ok(None) => {}
-                }
-            }
-            Ok(None)
+            sc.do_actions(actions).map(|(_, v)| v)
         })
     }
 
-    pub fn colon_select(&mut self, p: &Proto) -> Result<Option<Value>, ActionError> {
+    pub fn colon_select(&mut self, p: &Proto) -> Result<Value, ActionError> {
         let r = self
             .get_ref(&p)
             .ok_or(ActionError::new("Could not set path to non path"))?;
@@ -256,21 +246,36 @@ impl Scope {
             true => self.bases[blast] = nb,
             false => self.bases.push(nb),
         }
-        Ok(None)
+        Ok(Value::Null)
     }
 
-    pub fn do_action(&mut self, a: &Action) -> Result<Option<Value>, ActionError> {
+    //return bool is for is return
+    pub fn do_actions(&mut self, actions: &[Action]) -> AcResult {
+        let mut last_res = Value::Null;
+        for a in actions {
+            let r = self.do_action(a)?;
+            if let Action::Resolve(_) = a {
+                return Ok((AcReturn::No, r));
+            }
+            if let Action::Return(_) = a {
+                return Ok((AcReturn::Func, r));
+            }
+            last_res = r;
+        }
+        Ok((AcReturn::No, last_res))
+    }
+    pub fn do_action(&mut self, a: &Action) -> Result<Value, ActionError> {
         match a {
-            Action::NoOp => Ok(None),
+            Action::NoOp => Ok(Value::Null),
             Action::Set(p_ex, v_ex) => {
                 let p = p_ex.eval_path(self)?;
                 let v = v_ex.eval(self)?;
-                self.set(&p, v).map(|_| None)
+                self.set(&p, v).map(|_| Value::Null)
             }
-            Action::Display(p_ex) => {
+            Action::Resolve(p_ex) | Action::Return(p_ex) => {
                 let v = p_ex.eval(self)?;
-                println!(" - {}", v.print(0, &self.gm));
-                Ok(None)
+                //println!(" - {}", v.print(0, &self.gm));
+                Ok(v)
             }
             Action::Select(p_ex) => {
                 let p = p_ex.eval_path(self)?;
