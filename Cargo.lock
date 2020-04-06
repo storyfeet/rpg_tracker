@@ -266,7 +266,7 @@ dependencies = [
 
 [[package]]
 name = "gobble"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "failure 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -474,7 +474,7 @@ dependencies = [
  "cursive 0.13.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "failure_derive 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "gobble 0.1.0",
+ "gobble 0.1.1",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",

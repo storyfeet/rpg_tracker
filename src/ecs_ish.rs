@@ -15,47 +15,30 @@ impl PartialEq for GenData {
 }
 
 impl GenData {
-    pub fn clone_ignore_gm(&self) -> GenData {
-        GenData {
-            pos: self.pos,
-            gen: self.gen,
-            strong: self.strong,
+    pub fn to_strong(mut self, gm: &mut GenManager) -> Self {
+        if !self.strong {
+            self.strong = true;
+            gm.inc_rc(&self);
         }
+        self
     }
-    pub fn clone(&self, gm: &mut GenManager) -> GenData {
-        if self.strong {
-            if gm.inc_rc(self) {
-                return GenData {
-                    pos: self.pos,
-                    gen: self.gen,
-                    strong: true,
-                };
-            }
-        }
-        GenData {
-            pos: self.pos,
-            gen: self.gen,
-            strong: false,
-        }
-    }
-
-    pub fn clone_strong(&self, gm: &mut GenManager) -> Option<GenData> {
-        if gm.inc_rc(self) {
-            Some(GenData {
-                pos: self.pos,
-                gen: self.gen,
-                strong: true,
-            })
-        } else {
-            None
-        }
-    }
-
     pub fn clone_weak(&self) -> GenData {
         GenData {
             pos: self.pos,
             gen: self.gen,
             strong: false,
+        }
+    }
+
+    pub fn clone_strong(&self, gm: &mut GenManager) -> GenData {
+        self.clone_weak().to_strong(gm)
+    }
+
+    pub fn clone_ig(&self) -> Self {
+        GenData {
+            pos: self.pos,
+            gen: self.gen,
+            strong: self.strong,
         }
     }
 }

@@ -149,9 +149,7 @@ impl Expr {
             Oper(Op::Dot, _, _) | Ident(_) | DotStart(_) | Rooted(_) => {
                 let proto = self.eval_path(sc)?;
                 let v = sc.get(&proto).ok_or(ActionError::new("Nothing at path"))?;
-                let vs = v.clone_ignore_rc();
-                vs.rc_up(sc.gm_mut());
-                vs
+                v.clone_weak().to_strong(sc.gm_mut())
             }
             List(ref l) => {
                 let mut res = Vec::new();

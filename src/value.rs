@@ -224,18 +224,18 @@ impl Value {
         }
     }
 
-    pub fn clone_ignore_rc(&self) -> Value {
+    pub fn clone_weak(&self) -> Value {
         match self {
             Value::Null => Value::Null,
             Value::Bool(b) => Value::Bool(*b),
             Value::Num(n) => Value::Num(*n),
             Value::Str(s) => Value::Str(s.clone()),
-            Value::Ref(gd) => Value::Ref(gd.clone_ignore_gm()),
-            Value::List(v) => Value::List(v.iter().map(|gd| gd.clone_ignore_gm()).collect()),
+            Value::Ref(gd) => Value::Ref(gd.clone_weak()),
+            Value::List(v) => Value::List(v.iter().map(|gd| gd.clone_weak()).collect()),
             Value::Map(m) => {
                 let mut res = BTreeMap::new();
                 for (k, v) in m {
-                    res.insert(k.clone(), v.clone_ignore_gm());
+                    res.insert(k.clone(), v.clone_weak());
                 }
                 Value::Map(res)
             }
@@ -244,29 +244,28 @@ impl Value {
         }
     }
 
-    pub fn rc_up(&self, gm: &mut GenManager) {
+    pub fn to_strong(self, gm: &mut GenManager) -> Self {
         match self {
-            Value::List(l) => {
-                for i in l {
-                    gm.inc_rc(i);
+            Value::List(mut l) => {
+                for v in l.iter_mut() {
+                    *v = v.clone_strong(gm)
                 }
+                Value::List(l)
             }
-            Value::Map(m) => {
-                for v in m.values() {
-                    gm.inc_rc(v);
+            Value::Map(mut m) => {
+                for (_, v) in m.iter_mut() {
+                    *v = v.clone_strong(gm)
                 }
+                Value::Map(m)
             }
-            Value::Ref(r) => {
-                gm.inc_rc(r);
-            }
-            _ => {}
+            Value::Ref(r) => Value::Ref(r.clone_strong(gm)),
+            s => s,
         }
     }
 
     pub fn clone_shallow(&self, gm: &mut GenManager) -> Value {
-        let res = self.clone_ignore_rc();
-        res.rc_up(gm);
-        res
+        let res = self.clone_weak();
+        res.to_strong(gm)
     }
 
     pub fn give_child(
@@ -281,19 +280,24 @@ impl Value {
             _ => Err(ActionError::new("Not childable type")),
         }
     }
-    pub fn try_give_child(&mut self, pn: &ProtoNode, gd: &GenData) -> Option<(bool, GenData)> {
+    pub fn try_give_child(
+        &mut self,
+        pn: &ProtoNode,
+        gd: GenData,
+    ) -> Result<(bool, GenData), ActionError> {
+        let g_res = gd.clone_weak();
         match self {
             Value::Map(m) => {
                 if let Some(gr) = m.get(&pn) {
-                    return Some((false, gr.clone_ignore_gm()));
+                    return Ok((false, gr.clone_weak()));
                 } else {
-                    m.insert(pn.clone(), gd.clone_ignore_gm());
-                    return Some((true, gd.clone_ignore_gm()));
+                    m.insert(pn.clone(), gd);
+                    return Ok((true, g_res));
                 }
             }
             Value::Ref(_r) => unimplemented!("Try Give Child needs Ref"),
             Value::List(_r) => unimplemented!("Try Give Child needs List"),
-            _ => return None,
+            _ => return Err(ActionError::new("Could not give Child")),
         }
     }
 }

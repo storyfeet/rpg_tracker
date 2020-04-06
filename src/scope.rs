@@ -99,12 +99,12 @@ impl Scope {
     }
 
     pub fn get<'a>(&'a self, p: &Proto) -> Option<&'a Value> {
-        let b = self.select_base(p)?.clone_ignore_gm();
+        let b = self.select_base(p)?.clone_weak();
         self.get_from(&b, p.pp()).map(|(_, v)| v)
     }
 
     pub fn get_ref(&self, p: &Proto) -> Option<GenData> {
-        let b = self.select_base(p)?.clone_ignore_gm();
+        let b = self.select_base(p)?.clone_weak();
         self.get_from(&b, p.pp()).map(|(r, _)| r)
     }
 
@@ -123,7 +123,7 @@ impl Scope {
                 v = self.gm.get(g)?;
             }
         }
-        Some((lg.clone_ignore_gm(), v))
+        Some((lg.clone_weak(), v))
     }
 
     pub fn get_or_make_child(
@@ -133,7 +133,8 @@ impl Scope {
     ) -> Result<GenData, ActionError> {
         match v {
             Value::Map(m) => match m.get(&p) {
-                Some(v) => Ok(v.clone(&mut self.gm)),
+                Some(gd) => Ok(gd.clone_weak()),
+
                 None => Ok(self.gm.push(Value::map())),
             },
             //Value::List(l)=>
@@ -148,7 +149,7 @@ impl Scope {
         let b = self
             .select_base(p)
             .ok_or(ActionError::new("No base"))?
-            .clone_ignore_gm();
+            .clone_weak();
         self.set_from(b, p.pp(), v)
     }
 
@@ -164,19 +165,23 @@ impl Scope {
         while pp.remaining() > 1 {
             let p = pp.next().unwrap();
             let n_gd = self.gm.push(Value::map());
-            let v = self
-                .gm
-                .get_mut(&c_gd)
-                .ok_or(ActionError::new("no base or deeper problem"))?;
-            c_gd = match v.try_give_child(p, &n_gd) {
-                Some((true, g)) => g,
-                Some((false, g)) => {
-                    self.gm.drop_ref(n_gd);
-                    g
-                }
+            let v = match self.gm.get_mut(&c_gd) {
+                Some(v) => v,
                 None => {
                     self.gm.drop_ref(n_gd);
-                    return Err(ActionError::new("Could not give child"));
+                    return Err(ActionError::new("no base or deeper problem"))?;
+                }
+            };
+            let n_drop = n_gd.clone_ig();
+            c_gd = match v.try_give_child(p, n_gd) {
+                Ok((true, g)) => g,
+                Ok((false, g)) => {
+                    self.gm.drop_ref(n_drop);
+                    g
+                }
+                Err(e) => {
+                    self.gm.drop_ref(n_drop);
+                    return Err(e);
                 }
             };
         }
@@ -185,7 +190,7 @@ impl Scope {
             .gm
             .get_mut(&c_gd)
             .ok_or(ActionError::new("no base or deeper problem"))?;
-        match v.give_child(pp.next().unwrap().clone(), val_ref.clone_ignore_gm()) {
+        match v.give_child(pp.next().unwrap().clone(), val_ref.clone_weak()) {
             Ok(Some(gdrop)) => {
                 self.gm.drop_ref(gdrop);
                 Ok(())
@@ -235,7 +240,7 @@ impl Scope {
         let r = self
             .get_ref(&p)
             .ok_or(ActionError::new("Could not set path to non path"))?;
-        let rc = r.clone_ignore_gm();
+        let rc = r.clone_weak();
         self.gm.inc_rc(&rc);
         let nb = Base {
             gd: rc,
