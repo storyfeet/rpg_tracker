@@ -49,11 +49,10 @@ fn main() -> Result<(), failure::Error> {
     }*/
 
     loop {
-        let mut input = String::new();
-        match std::io::stdin().read_line(&mut input) {
-            Ok(0) => return Ok(()),
-            _ => {}
-        }
+        let input = match read_input() {
+            Some(s) => s,
+            None => break,
+        };
         if let Err(e) = scope.handle_input(&input) {
             if let ActionError::ParseErr(ParseError {
                 code: ECode::EOF,
@@ -66,6 +65,33 @@ fn main() -> Result<(), failure::Error> {
             }
         }
     }
+    println!("All Done");
+    Ok(())
+}
+
+pub fn read_input() -> Option<String> {
+    print!(">>");
+    std::io::stdout().flush().ok();
+    let mut input = String::new();
+    if let Ok(0) = std::io::stdin().read_line(&mut input) {
+        return None;
+    }
+    if input.chars().next() == Some('<') {
+        let mut res = input[1..].to_string();
+        loop {
+            print!("..   ");
+            std::io::stdout().flush().ok();
+            let mut input = String::new();
+            if let Ok(0) = std::io::stdin().read_line(&mut input) {
+                return None;
+            }
+            match input.chars().next() {
+                Some('>') => return Some(res),
+                _ => res.push_str(&input),
+            }
+        }
+    }
+    return Some(input);
 }
 
 pub fn write_action<P: AsRef<Path>>(fname: &Option<P>, s: &str) -> std::io::Result<()> {

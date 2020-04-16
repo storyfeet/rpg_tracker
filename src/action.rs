@@ -12,7 +12,6 @@ pub enum AcReturn {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
-    NoOp,
     Select(Expr),
     SetSelect(Expr, Expr),
     OpSet(Op, Expr, Expr),

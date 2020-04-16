@@ -5,17 +5,6 @@ use crate::action::Action;
 
 use crate::expr::{Expr, MapItem, Op};
 
-pub fn action() -> impl Parser<Action> {
-    ws(0)
-        .ig_then(pp_action)
-        .then_ig(l_break())
-        .or(l_break().map(|_| Action::NoOp))
-}
-
-pub fn action_list() -> impl Parser<Vec<Action>> {
-    sep(pp_action, l_break(), true)
-}
-
 pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
     let ps = s_tag("+")
         .ig_then(maybe(num()))
@@ -61,7 +50,7 @@ fn num() -> impl Parser<isize> {
         .try_map(|ns| isize::from_str(&ns).map_err(|_| ECode::SMess("Not a Num")))
 }
 
-fn l_break() -> impl Parser<()> {
+pub fn l_break() -> impl Parser<()> {
     ws(0).then_ig(tag(";").or(tag("\n")))
 }
 
@@ -103,7 +92,9 @@ fn map() -> impl Parser<Expr> {
 }
 
 fn code_block() -> impl Parser<Vec<Action>> {
-    s_tag("{").ig_then(action_list()).then_ig(s_tag("}"))
+    s_tag("{")
+        .ig_then(sep_until(maybe(pp_action), l_break(), s_tag("}")))
+        .map(|v| v.into_iter().filter_map(|a| a).collect())
 }
 
 fn if_clause() -> impl Parser<Expr> {

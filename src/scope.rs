@@ -4,7 +4,7 @@ use crate::error::ActionError;
 use crate::expr::Expr;
 use crate::proto::{Proto, ProtoNode, ProtoP};
 use crate::value::Value;
-use gobble::{LCChars, Parser};
+//use gobble::{LCChars, Parser};
 //use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::path::Path;
@@ -53,12 +53,12 @@ impl Scope {
     }
 
     pub fn handle_input(&mut self, s: &str) -> Result<(), ActionError> {
-        let mut ss = LCChars::str(s);
-        let ac = crate::nomp::action();
-        loop {
-            let (ns, a) = ac.parse(&ss)?;
-            //println!("Action = {:?}", a);
-            ss = ns;
+        //let mut ss = LCChars::str(s);
+        use crate::nomp::*;
+        use gobble::*;
+        let ac = sep_until(maybe(pp_action), l_break(), eoi);
+        let v: Vec<Action> = ac.parse_s(s)?.into_iter().filter_map(|a| a).collect();
+        for a in v {
             match self.do_action(&a) {
                 //TODO consider writing file
                 Ok(Value::Null) => {}
@@ -68,6 +68,7 @@ impl Scope {
                 Err(e) => println!("Error {}", e),
             }
         }
+        Ok(())
     }
 
     pub fn gm_mut(&mut self) -> &mut GenManager {
@@ -271,7 +272,6 @@ impl Scope {
     }
     pub fn do_action(&mut self, a: &Action) -> Result<Value, ActionError> {
         match a {
-            Action::NoOp => Ok(Value::Null),
             Action::Set(p_ex, v_ex) => {
                 let p = p_ex.eval_path(self)?;
                 let v = v_ex.eval(self)?;
@@ -291,6 +291,38 @@ impl Scope {
                 let v = v_ex.eval(self)?;
                 self.set(&p, v)?;
                 self.colon_select(&p)
+            }
+            Action::AddItem(num, id) => {
+                let b = self.bases.last().expect("Bases should never be empty");
+                let gdo = match self.gm.get(&b.gd) {
+                    Some(Value::Map(m)) => match m.get(&ProtoNode::str(id)) {
+                        Some(gd) => Some(gd.clone_ig()),
+                        None => None,
+                    },
+                    _ => return Err(ActionError::new("cannot add like this to non map")),
+                };
+                match gdo {
+                    Some(gd) => match self.gm.get_mut(&gd) {
+                        Some(Value::Num(ref mut n)) => *n += num,
+                        Some(_) | None => {
+                            return Err(ActionError::new("Can only add to number values"))
+                        }
+                    },
+                    None => {
+                        let gd = self.gm.push(Value::Num(*num));
+                        match self.gm.get_mut(&b.gd) {
+                            Some(Value::Map(m)) => {
+                                m.insert(ProtoNode::str(id), gd);
+                            }
+                            _ => {
+                                return Err(ActionError::new(
+                                    "Map  dropped between previous checks",
+                                ))
+                            }
+                        }
+                    }
+                }
+                Ok(Value::Null)
             }
             _ => unimplemented!(),
         }
