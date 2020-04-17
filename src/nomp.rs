@@ -13,7 +13,7 @@ pub fn pp_action<'a>(i: &LCChars<'a>) -> ParseRes<'a, Action> {
         .or(s_tag("-")
             .ig_then(maybe(num()))
             .then(ident())
-            .map(|(nop, s)| Action::RemItem(nop.unwrap_or(1), s)))
+            .map(|(nop, s)| Action::AddItem(-nop.unwrap_or(1), s)))
         .or(s_tag("return").ig_then(p_expr).map(|e| Action::Return(e)));
     if let Ok((r, v)) = ps.parse(i) {
         return Ok((r, v));

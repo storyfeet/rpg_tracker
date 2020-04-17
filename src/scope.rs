@@ -324,7 +324,11 @@ impl Scope {
                 }
                 Ok(Value::Null)
             }
-            _ => unimplemented!(),
+            Action::OpSet(op, lf, rt) => {
+                let p = lf.eval_path(self)?;
+                let v = op.eval(lf, rt, self)?;
+                self.set(&p, v).map(|_| Value::Null)
+            } //_ => unimplemented!(),
         }
         /*Select(Expr),
         OpSet(Op, Expr, Expr),

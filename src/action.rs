@@ -17,7 +17,6 @@ pub enum Action {
     OpSet(Op, Expr, Expr),
     Set(Expr, Expr),
     AddItem(isize, String),
-    RemItem(isize, String),
     Resolve(Expr),
     Return(Expr),
 }

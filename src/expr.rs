@@ -75,6 +75,19 @@ impl Op {
             Equal => "==",
         }
     }
+
+    pub fn eval(&self, a: &Expr, b: &Expr, sc: &mut Scope) -> Result<Value, ActionError> {
+        match self {
+            Op::Add => a.eval(sc)?.try_add(b.eval(sc)?, sc.gm_mut()),
+            Op::Sub => a.eval(sc)?.try_sub(b.eval(sc)?),
+            Op::Mul => a.eval(sc)?.try_mul(b.eval(sc)?),
+            Op::Div => a.eval(sc)?.try_div(b.eval(sc)?),
+            Op::Greater => Ok(Value::Bool(a.eval(sc)? > b.eval(sc)?)),
+            Op::Less => Ok(Value::Bool(a.eval(sc)? < b.eval(sc)?)),
+            Op::Equal => Ok(Value::Bool(a.eval(sc)? == b.eval(sc)?)),
+            Op::Dot => Err(ActionError::new("Could not appy .= operation")),
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -139,18 +152,12 @@ impl Expr {
 
             Bracket(a) => a.eval(sc)?,
             Neg(a) => a.eval(sc)?.try_neg()?,
-            Oper(Op::Add, a, b) => a.eval(sc)?.try_add(b.eval(sc)?, sc.gm_mut())?,
-            Oper(Op::Sub, a, b) => a.eval(sc)?.try_sub(b.eval(sc)?)?,
-            Oper(Op::Mul, a, b) => a.eval(sc)?.try_mul(b.eval(sc)?)?,
-            Oper(Op::Div, a, b) => a.eval(sc)?.try_div(b.eval(sc)?)?,
-            Oper(Op::Greater, a, b) => Value::Bool(a.eval(sc)? > b.eval(sc)?),
-            Oper(Op::Less, a, b) => Value::Bool(a.eval(sc)? < b.eval(sc)?),
-            Oper(Op::Equal, a, b) => Value::Bool(a.eval(sc)? == b.eval(sc)?),
             Oper(Op::Dot, _, _) | Ident(_) | DotStart(_) | Rooted(_) => {
                 let proto = self.eval_path(sc)?;
                 let v = sc.get(&proto).ok_or(ActionError::new("Nothing at path"))?;
                 v.clone_weak().to_strong(sc.gm_mut())
             }
+            Oper(o, a, b) => o.eval(a, b, sc)?,
             List(ref l) => {
                 let mut res = Vec::new();
                 for e in l {
